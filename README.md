@@ -40,7 +40,7 @@ The shared application uses Supabase Free for Postgres, anonymous sessions and R
 
 1. Create a Supabase project on the Free plan.
 2. In Supabase Authentication settings, enable **Anonymous Sign-Ins**. There is no email, password or logout flow in this app.
-3. Open the Supabase SQL Editor and run all migrations in order: `202611010001_initial_schema.sql`, `202611020001_individual_member_access_codes.sql`, `202611020002_allocation_timeline_shift_handover.sql`, and `202611020003_expose_email_subject_in_dashboard.sql`.
+3. Open the Supabase SQL Editor and run all migrations in order: `202611010001_initial_schema.sql`, `202611020001_individual_member_access_codes.sql`, `202611020002_allocation_timeline_shift_handover.sql`, and `202611020003_expose_email_subject_in_dashboard.sql`, and `202611020004_enforce_shift_owner_for_reviews.sql`.
 4. Edit `supabase/seed.sql`: replace the 14 sample member names and all 14 individual-code placeholders in `supabase/seed.sql` with unique random codes of at least 16 characters. The legacy workspace code placeholder is unused after the second migration. Keep every real code out of Git and share each code privately with its matching colleague. Run the edited seed SQL once.
 5. Set `supabaseUrl` and the **publishable/anon key** in `site/config.js`. Never use a Supabase `service_role` key in browser code.
 6. Deploy the repository to Netlify with `site` as the publish directory. No build command is required.
