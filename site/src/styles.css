@@ -4,3 +4,9 @@
 @media(max-width:420px){.brand-copy{font-size:14px}.brand-mark{width:34px;height:34px}.nav{max-width:68vw}.nav button{padding:8px}.greeting-row{display:block}.date-stamp{text-align:left;margin-top:10px}.stats{grid-template-columns:1fr 1fr}.report-grid{grid-template-columns:1fr 1fr}.assignee-card{flex-wrap:wrap}.assignee-actions{width:100%;justify-content:flex-end}}
 
 .attendance-control{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;margin-top:15px;border:1px solid var(--line);border-radius:11px;background:#ffffff05}.attendance-control strong{display:block;font-size:11px}.attendance-control small{display:block;margin-top:4px;color:var(--muted);font-size:10px}
+
+/* Precision clock and email-allocation timeline */
+.digital-clock{font:700 13px ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.7px;color:var(--accent);background:#d1f36a0c;border:1px solid #b7df5c45;border-radius:9px;padding:8px 10px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.allocation-row{grid-template-columns:minmax(170px,1.3fr) minmax(165px,1fr) minmax(110px,.8fr) auto}
+.allocation-subject{display:block;color:#d6e0e9!important;font-size:10px!important;line-height:1.4;margin-top:4px;white-space:normal;overflow-wrap:anywhere}
+@media(max-width:720px){.digital-clock{font-size:11px;padding:7px 8px}.allocation-row{grid-template-columns:1fr 1fr}.allocation-row>div{min-width:0;overflow-wrap:anywhere}}
