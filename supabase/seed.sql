@@ -34,3 +34,29 @@ on conflict (workspace_id) do nothing;
 -- Add the first month's shift rows after editing employee names and shift coverage.
 -- Suggested presets: morning 06:00-15:00, mid 11:00-20:00,
 -- evening 14:00-23:00, night 22:00-07:00 (night shift ends next day).
+
+
+-- Give each colleague a separate code. Replace every placeholder with a unique
+-- random value of at least 16 characters. Share each value privately with its owner.
+-- Do not commit real codes or paste them into public issues.
+insert into public.member_access_codes (workspace_id, member_id, access_code_hash)
+select m.workspace_id, m.id, encode(extensions.digest(c.access_code, 'sha256'), 'hex')
+from public.members m
+join (values
+  (1, 'REPLACE-WITH-INDIVIDUAL-CODE-01'),
+  (2, 'REPLACE-WITH-INDIVIDUAL-CODE-02'),
+  (3, 'REPLACE-WITH-INDIVIDUAL-CODE-03'),
+  (4, 'REPLACE-WITH-INDIVIDUAL-CODE-04'),
+  (5, 'REPLACE-WITH-INDIVIDUAL-CODE-05'),
+  (6, 'REPLACE-WITH-INDIVIDUAL-CODE-06'),
+  (7, 'REPLACE-WITH-INDIVIDUAL-CODE-07'),
+  (8, 'REPLACE-WITH-INDIVIDUAL-CODE-08'),
+  (9, 'REPLACE-WITH-INDIVIDUAL-CODE-09'),
+  (10, 'REPLACE-WITH-INDIVIDUAL-CODE-10'),
+  (11, 'REPLACE-WITH-INDIVIDUAL-CODE-11'),
+  (12, 'REPLACE-WITH-INDIVIDUAL-CODE-12'),
+  (13, 'REPLACE-WITH-INDIVIDUAL-CODE-13'),
+  (14, 'REPLACE-WITH-INDIVIDUAL-CODE-14')
+) as c(sort_order, access_code) on c.sort_order = m.sort_order
+on conflict (member_id) do update
+set access_code_hash = excluded.access_code_hash, updated_at = now();
