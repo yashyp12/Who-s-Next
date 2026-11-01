@@ -85,7 +85,7 @@ begin
       where r.workspace_id = v_workspace_id and r.member_id = m.id
         and r.status = 'approved' and r.start_at <= v_now and r.end_at > v_now
     )
-  order by s.start_time, m.sort_order
+  order by ((s.work_date + s.start_time) at time zone v_timezone) desc, m.sort_order
   limit 1;
 
   if v_next is not distinct from v_previous then
