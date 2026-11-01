@@ -158,52 +158,32 @@ function showJoinScreen(message = '') {
   $('#app').innerHTML = `
     <main class="join-screen"><section class="join-card">
       <div class="brand"><span class="brand-mark">W</span><div><div class="brand-copy">WHO'S <span>next</span></div><div class="workspace-tag">Team operations</div></div></div>
-      <div class="eyebrow">One shared workspace</div><h1>Step into your shift.</h1>
-      <p>No account, email or password. Enter the team code once, then choose your name. This browser remembers your anonymous workspace session.</p>
+      <div class="eyebrow">Your team workspace</div><h1>Step into your shift.</h1>
+      <p>Enter the individual access code shared with you. Your code identifies your team profile—no username, email or password required.</p>
       ${message ? `<div class="notice">${escapeHtml(message)}</div>` : ''}
       <form id="join-form">
-        <div class="field"><label for="join-code">Team access code</label><input id="join-code" name="code" type="password" autocomplete="off" required minlength="6" placeholder="Enter the code shared by your team" /></div>
-        <button class="button button-primary" type="button" id="load-roster">Continue <span>→</span></button>
-        <div id="roster-field" class="field hidden" style="margin-top:14px"><label for="join-member">Your team profile</label><select id="join-member" required><option value="">Choose your name</option></select><button class="button button-primary" type="submit">Open workspace</button></div>
+        <div class="field"><label for="join-code">Your individual access code</label><input id="join-code" name="code" type="password" autocomplete="one-time-code" required minlength="16" maxlength="200" placeholder="Enter your personal team code" /></div>
+        <button class="button button-primary" type="submit">Open workspace <span>→</span></button>
       </form>
-      <div class="join-help">This is a shared team space, not verified employee authentication. Anyone with the team code can choose a roster profile. Use only approved operational information.</div>
+      <div class="join-help">Your code maps to one team member. Keep it private and contact the workspace owner if it is lost or exposed.</div>
     </section></main>`;
-  $('#load-roster').addEventListener('click', loadJoinRoster);
   $('#join-form').addEventListener('submit', joinWorkspace);
-}
-
-async function loadJoinRoster() {
-  const code = $('#join-code').value.trim();
-  if (!code) return toast('Enter the team access code.', true);
-  const button = $('#load-roster'); button.disabled = true; button.textContent = 'Checking…';
-  try {
-    const { data, error } = await supabase.rpc('get_joinable_workspace', { p_join_code: code });
-    if (error) throw error;
-    const select = $('#join-member');
-    select.innerHTML = '<option value="">Choose your name</option>' + (data?.members || []).map((member) => `<option value="${escapeAttr(member.id)}">${escapeHtml(member.name)}</option>`).join('');
-    if (!data?.members?.length) throw new Error('No active team members are configured yet. Ask the workspace owner to seed the roster.');
-    $('#roster-field').classList.remove('hidden');
-    button.textContent = 'Roster loaded';
-  } catch (error) {
-    toast(error.message || 'Unable to open this workspace.', true);
-    button.disabled = false; button.textContent = 'Continue →';
-  }
 }
 
 async function joinWorkspace(event) {
   event.preventDefault();
   const code = $('#join-code').value.trim();
-  const memberId = $('#join-member').value;
-  if (!memberId) return toast('Choose your team profile.', true);
-  const button = $('#join-form button[type="submit"]'); button.disabled = true; button.textContent = 'Opening…';
+  if (code.length < 16) return toast('Enter the individual access code shared with you.', true);
+  const button = $('#join-form button[type="submit"]');
+  button.disabled = true; button.textContent = 'Opening workspace…';
   try {
-    const { data, error } = await supabase.rpc('join_workspace', { p_join_code: code, p_member_id: memberId });
+    const { data, error } = await supabase.rpc('join_workspace', { p_access_code: code });
     if (error) throw error;
     currentMemberId = data.member_id; workspaceId = data.workspace_id; setupRealtime();
     await reloadRemote();
   } catch (error) {
     toast(error.message || 'Unable to join workspace.', true);
-    button.disabled = false; button.textContent = 'Open workspace';
+    button.disabled = false; button.innerHTML = 'Open workspace <span>→</span>';
   }
 }
 
