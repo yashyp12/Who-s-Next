@@ -48,6 +48,21 @@ test('recording an allocation advances the pointer exactly once', () => {
   assert.equal(result.state.lastAllocatedMemberId, 'm2');
 });
 
+test('each successful allocation immediately advances the next recipient regardless of prior completion', () => {
+  const members = [member('m1'), member('m2'), member('m3')];
+  let allocationState = { lastAllocatedMemberId: null };
+  const first = recordAllocation(allocationState, members, { id: 'a1', assignedBy: 'operator', assignedAt: context.now, reference: 'MAIL-001' });
+  allocationState = first.state;
+  const second = recordAllocation(allocationState, members, { id: 'a2', assignedBy: 'operator', assignedAt: context.now, reference: 'MAIL-002' });
+  allocationState = second.state;
+  const third = recordAllocation(allocationState, members, { id: 'a3', assignedBy: 'operator', assignedAt: context.now, reference: 'MAIL-003' });
+  assert.deepEqual(
+    [first.allocation.memberId, second.allocation.memberId, third.allocation.memberId],
+    ['m1', 'm2', 'm3'],
+  );
+  assert.equal(third.state.lastAllocatedMemberId, 'm3');
+});
+
 test('time and request validators reject invalid ranges', () => {
   assert.match(validateTimeRange('12:00', '12:00'), /identical/);
   assert.equal(validateTimeRange('12:00', '13:00'), null);
