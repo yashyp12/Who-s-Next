@@ -59,7 +59,7 @@ This is a **low-friction, trust-based team identity model**, not verified employ
 3. A scheduled break removes the employee only during the break window.
 4. A pending request does **not** affect eligibility.
 5. The queue rotates through the full roster order after the last recorded recipient, skipping people who are currently ineligible. A successful allocation advances the pointer immediately in the same database transaction; completion does not control the rotation. Break expiry returns a colleague to their normal queue position automatically. A visible live clock shows workspace time to the second; the dashboard refreshes each minute to apply break and shift transitions.
-6. Only the current shift allocation owner can approve/reject requests or record the next allocation; the owner cannot decide their own request. Allocation responsibility automatically hands over when that owner leaves shift or becomes unavailable, selecting the earliest-starting eligible colleague.
+6. Only the current shift allocation owner can approve/reject requests or record the next allocation; the owner cannot decide their own request. Allocation responsibility automatically hands over when that owner leaves shift or becomes unavailable, selecting the most recently started eligible colleague.
 7. Any mapped team member may take over allocation responsibility. Every handover is recorded, and pending requests remain pending for the new assignee.
 8. Shift swaps affect one date only and are applied only after the invited colleague accepts.
 9. All operational timestamps are interpreted in the workspace timezone (seed default: `Asia/Kolkata`).
