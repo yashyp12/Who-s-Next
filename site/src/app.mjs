@@ -312,6 +312,7 @@ function renderOverview(me, assignee, counts, statuses) {
   const queue = queueMembers();
   const pending = state.requests.filter((request) => request.status === 'pending').slice(0, 3);
   const allocations = state.allocations.slice(0, 5);
+  const myStatus = statuses.find(({ member }) => member.id === currentMemberId)?.status;
   const hour = Number(localTime().slice(0, 2));
   return `
     <div class="greeting-row"><div><div class="eyebrow">${prettyDate(localDate())} · ${localTime()} local time</div><h2 style="font:800 19px Manrope;margin:8px 0 0">Good ${hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'}, ${escapeHtml(me.name.split(' ')[0])}.</h2><p>Here’s the current pulse of your team. Keep the next handover clear.</p></div><div class="date-stamp"><strong>${escapeHtml(state.workspaceName)}</strong>${statuses.length} rostered team members</div></div>
@@ -327,7 +328,7 @@ function renderOverview(me, assignee, counts, statuses) {
         <div class="report-grid" style="grid-template-columns:1fr 1fr;margin:0 0 13px"> <div class="report-card"><small>Working now</small><strong>${statuses.filter((x) => x.status.code !== 'off_shift' && x.status.code !== 'leave').length}</strong></div><div class="report-card"><small>Off shift / leave</small><strong>${statuses.filter((x) => ['off_shift','leave'].includes(x.status.code)).length}</strong></div></div>
         <div class="muted-copy">WHO’S next uses scheduled shifts, breaks and approved unavailability to calculate allocation eligibility. Requests still awaiting a decision do not remove an employee from the queue.</div>
         <div class="attendance-control"><div><strong>Shift attendance</strong><small>${latestAttendanceForCurrentMember()?.eventType === 'check_in' ? `Checked in at ${prettyTime(latestAttendanceForCurrentMember().occurredAt)}` : latestAttendanceForCurrentMember()?.eventType === 'check_out' ? `Last checked out at ${prettyTime(latestAttendanceForCurrentMember().occurredAt)}` : 'No attendance event recorded yet'}</small></div><button class="button button-secondary button-small" id="attendance-toggle">${latestAttendanceForCurrentMember()?.eventType === 'check_in' ? 'Check out' : 'Check in'}</button></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="button button-secondary button-small" id="add-break">＋ Plan a break</button><button class="button button-secondary button-small" id="set-shift">▦ Update shift</button></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">${myStatus?.code === 'break' ? '<button class="button button-secondary button-small" id="extend-break">＋ Extend my break</button>' : '<button class="button button-secondary button-small" id="add-break">＋ Plan a break</button>'}<button class="button button-secondary button-small" id="set-shift">▦ Update shift</button></div>
       </section>
     </div>
     <section class="panel team-panel" style="margin-bottom:16px"><div class="panel-head"><div><div class="panel-title">Team availability</div><div class="panel-subtitle">Eligibility is recalculated from the current shift and approved time windows</div></div><span class="panel-subtitle">${counts.available} available / ${statuses.length} total</span></div>
@@ -405,7 +406,8 @@ function bindViewActions() {
   $('#take-over')?.addEventListener('click', takeOver);
   $('#attendance-toggle')?.addEventListener('click', recordAttendance);
   $('#record-next')?.addEventListener('click', () => openAllocationDialog());
-  $('#add-break')?.addEventListener('click', openBreakDialog);
+  $('#add-break')?.addEventListener('click', () => openBreakDialog(false));
+  $('#extend-break')?.addEventListener('click', () => openBreakDialog(true));
   $('#set-shift')?.addEventListener('click', () => openShiftDialog());
   $('#new-shift-swap')?.addEventListener('click', openShiftSwapDialog);
   $$('[data-swap-response]').forEach((button) => button.addEventListener('click', () => respondShiftSwap(button.dataset.swapResponse, button.dataset.accept === 'true')));
@@ -452,15 +454,20 @@ function openShiftDialog(existingId = null) {
   $('#shift-preset')?.addEventListener('change', (event) => { const preset = SHIFT_PRESETS[event.target.value]; if (preset) { $('#shift-start').value = preset.start; $('#shift-end').value = preset.end; } });
 }
 
-function openBreakDialog() {
-  openDialog('Plan a break', 'A planned break removes you from the allocation queue only during its scheduled window.', `<div class="form-grid"><div class="field"><label for="break-date">Date</label><input id="break-date" name="date" type="date" required value="${localDate()}" /></div><div class="field"><label for="break-note">Break type / note</label><input id="break-note" name="note" maxlength="100" value="Scheduled break" required /></div><div class="field"><label for="break-start">Start</label><input id="break-start" name="start" type="time" required value="${localTime()}" /></div><div class="field"><label for="break-end">End</label><input id="break-end" name="end" type="time" required value="${localTime(addMinutes(new Date(), 30))}" /></div></div>`, 'Save break', async (form) => {
-    const item = { id: id(), memberId: currentMemberId, date: form.get('date'), start: form.get('start'), end: form.get('end'), note: form.get('note').trim() };
-    const error = validateTimeRange(item.start, item.end); if (error) throw new Error(error);
-    if (!isBreakWithinShift(item, state.shifts)) throw new Error('The break must fit inside one of your scheduled shifts. Add your shift first or adjust the break window.');
-    if (remoteMode) await rpc('add_break', { p_work_date: item.date, p_start: item.start, p_end: item.end, p_note: item.note });
-    else { state.breaks.push(item); logActivity(`${currentMember().name} planned a break for ${prettyDate(item.date)}.`, '◷'); saveDemoState(); }
-    await refreshAfterAction('Break saved.');
-  });
+function openBreakDialog(extension = false) {
+  const now = new Date();
+  const defaultEnd = localTime(addMinutes(now, 30));
+  openDialog(extension ? 'Extend your current break' : 'Plan a break',
+    extension ? 'Add extra break time from now. Your availability will return automatically when the extended window ends.' : 'A planned break removes you from the allocation queue only during its scheduled window.',
+    `<div class="form-grid"><div class="field"><label for="break-date">Date</label><input id="break-date" name="date" type="date" required value="${localDate()}" /></div><div class="field"><label for="break-note">Break type / note</label><input id="break-note" name="note" maxlength="100" value="${extension ? 'Break extension' : 'Scheduled break'}" required /></div><div class="field"><label for="break-start">Start</label><input id="break-start" name="start" type="time" required value="${localTime(now)}" /></div><div class="field"><label for="break-end">End</label><input id="break-end" name="end" type="time" required value="${defaultEnd}" /></div></div>`,
+    extension ? 'Extend break' : 'Save break', async (form) => {
+      const item = { id: id(), memberId: currentMemberId, date: form.get('date'), start: form.get('start'), end: form.get('end'), note: form.get('note').trim() };
+      const error = validateTimeRange(item.start, item.end); if (error) throw new Error(error);
+      if (!isBreakWithinShift(item, state.shifts)) throw new Error('The break must fit inside one of your scheduled shifts. Add your shift first or adjust the break window.');
+      if (remoteMode) await rpc('add_break', { p_work_date: item.date, p_start: item.start, p_end: item.end, p_note: item.note });
+      else { state.breaks.push(item); logActivity(`${currentMember().name} ${extension ? 'extended a break' : 'planned a break'} for ${prettyDate(item.date)}.`, '◷'); saveDemoState(); }
+      await refreshAfterAction(extension ? 'Break extended. You will return to the queue when the extension ends.' : 'Break saved.');
+    });
 }
 
 function openAllocationDialog() {
