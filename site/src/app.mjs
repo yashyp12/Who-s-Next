@@ -243,7 +243,7 @@ function renderApp() {
         </nav></div>
         <div class="sidebar-bottom">
           ${remoteMode ? '<div class="demo-note" style="border-color:#355944;background:#183327;color:#a6d9b5">Live team workspace<br/>Changes sync across browsers.</div>' : '<div class="demo-note">Preview mode<br/>Sample team data is stored only in this browser. Connect Supabase for shared live data.</div>'}
-          <div class="profile-mini"><span class="avatar">${initials(me.name)}</span><div style="min-width:0;flex:1"><strong>${escapeHtml(me.name)}</strong><small>${isCurrentAssignee() ? 'Current email assignee' : 'Team member'}</small>${remoteMode ? '' : `<select id="demo-profile" aria-label="Preview as team member" style="margin-top:6px;max-width:155px;background:#111923;border:1px solid #334253;color:#9eafc2;border-radius:6px;padding:4px;font-size:9px">${state.members.map((m)=>`<option value="${m.id}" ${m.id===currentMemberId?'selected':''}>${escapeHtml(m.name)}</option>`).join('')}</select>`}</div></div>
+          <div class="profile-mini"><span class="avatar">${initials(me.name)}</span><div style="min-width:0;flex:1"><strong>${escapeHtml(me.name)}</strong><small>Signed in as · ${isCurrentAssignee() ? 'Shift allocation owner' : 'Team member'}</small>${remoteMode ? '' : `<select id="demo-profile" aria-label="Preview as team member" style="margin-top:6px;max-width:155px;background:#111923;border:1px solid #334253;color:#9eafc2;border-radius:6px;padding:4px;font-size:9px">${state.members.map((m)=>`<option value="${m.id}" ${m.id===currentMemberId?'selected':''}>${escapeHtml(m.name)}</option>`).join('')}</select>`}</div></div>
         </div>
       </aside>
       <main class="main">
