@@ -65,7 +65,7 @@ begin
   end if;
 
   -- If the current owner has left shift / started a break / become unavailable,
-  -- move responsibility to the earliest-starting eligible shift colleague.
+  -- move responsibility to the colleague in the most recently started eligible active shift.
   select m.id into v_next
   from public.members m
   join public.shifts s on s.workspace_id = m.workspace_id and s.member_id = m.id
