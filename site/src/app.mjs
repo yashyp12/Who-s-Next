@@ -19,6 +19,7 @@ let realtimeChannel = null;
 let toastTimer = null;
 let clockTimer = null;
 let refreshInProgress = false;
+let lastRefreshMinute = null;
 
 const partsInTimezone = (date, timeZone) => { const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(date); return Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value])); };
 const partsInWorkspace = (date = new Date()) => partsInTimezone(date, state?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);
@@ -265,9 +266,12 @@ function renderApp() {
 
 function startWorkspaceClock() {
   const update = () => {
+    const now = new Date();
     const clock = $('#workspace-clock');
-    if (clock) clock.textContent = new Intl.DateTimeFormat(undefined, { timeZone: state?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date());
-    if (new Date().getSeconds() === 0 && !refreshInProgress) {
+    if (clock) clock.textContent = new Intl.DateTimeFormat(undefined, { timeZone: state?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(now);
+    const minuteKey = [now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes()].join('-');
+    if (minuteKey !== lastRefreshMinute && !refreshInProgress) {
+      lastRefreshMinute = minuteKey;
       if (remoteMode) reloadRemote().catch((error) => toast(error.message || 'Automatic shift refresh failed.', true));
       else renderApp();
     }
