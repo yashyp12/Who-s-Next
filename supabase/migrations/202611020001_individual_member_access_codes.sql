@@ -1,5 +1,5 @@
 -- WHO'S next: replace shared workspace code + self-selected profile with one code per colleague.
--- Apply after 202611010001_initial_schema.sql. Existing anonymous sessions remain mapped.
+-- Apply after 202611010001_initial_schema.sql. Existing profile mappings are cleared so every browser must rejoin with its member-specific code.
 -- Each access code is hashed in Postgres; plaintext codes must never be committed.
 
 create table if not exists public.member_access_codes (
@@ -12,6 +12,9 @@ create table if not exists public.member_access_codes (
 
 alter table public.member_access_codes enable row level security;
 revoke all on public.member_access_codes from anon, authenticated;
+
+-- Force browsers using the old shared-code/profile-picker flow to prove their individual code.
+delete from public.member_sessions;
 
 create or replace function public.join_workspace(p_access_code text)
 returns jsonb
