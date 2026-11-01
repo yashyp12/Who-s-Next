@@ -18,8 +18,8 @@ let workspaceId = null;
 let realtimeChannel = null;
 let toastTimer = null;
 let clockTimer = null;
+let boundaryTimer = null;
 let refreshInProgress = false;
-let lastRefreshMinute = null;
 
 const partsInTimezone = (date, timeZone) => { const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(date); return Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value])); };
 const partsInWorkspace = (date = new Date()) => partsInTimezone(date, state?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);
@@ -262,24 +262,66 @@ function renderApp() {
   $('#demo-profile')?.addEventListener('change', (event) => { currentMemberId = event.target.value; localStorage.setItem(PROFILE_KEY, currentMemberId); renderApp(); });
   bindViewActions();
   startWorkspaceClock();
+  scheduleOperationalRefresh();
 }
 
 function startWorkspaceClock() {
   const update = () => {
-    const now = new Date();
     const clock = $('#workspace-clock');
-    if (clock) clock.textContent = new Intl.DateTimeFormat(undefined, { timeZone: state?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(now);
-    const minuteKey = [now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes()].join('-');
-    if (lastRefreshMinute === null) lastRefreshMinute = minuteKey;
-    else if (minuteKey !== lastRefreshMinute && !refreshInProgress) {
-      lastRefreshMinute = minuteKey;
-      if (remoteMode) reloadRemote().catch((error) => toast(error.message || 'Automatic shift refresh failed.', true));
-      else renderApp();
-    }
+    if (clock) clock.textContent = new Intl.DateTimeFormat(undefined, { timeZone: state?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date());
   };
   update();
   if (clockTimer) clearInterval(clockTimer);
   clockTimer = setInterval(update, 1000);
+}
+
+function addCalendarDays(date, days) {
+  const value = new Date(`${date}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+function nextOperationalBoundary() {
+  const now = Date.now();
+  const candidates = [];
+  const addLocalBoundary = (date, time) => {
+    try {
+      const value = new Date(workspaceInputToIso(`${date}T${time}`)).getTime();
+      if (Number.isFinite(value) && value > now) candidates.push(value);
+    } catch { /* Ignore invalid or incomplete schedule entries. */ }
+  };
+  for (const shift of state.shifts || []) {
+    const endDate = shift.end <= shift.start ? addCalendarDays(shift.date, 1) : shift.date;
+    addLocalBoundary(shift.date, shift.start);
+    addLocalBoundary(endDate, shift.end);
+  }
+  for (const item of state.breaks || []) {
+    const endDate = item.end <= item.start ? addCalendarDays(item.date, 1) : item.date;
+    addLocalBoundary(item.date, item.start);
+    addLocalBoundary(endDate, item.end);
+  }
+  for (const request of state.requests || []) {
+    if (request.status !== 'approved') continue;
+    for (const value of [request.startAt, request.endAt]) {
+      const timestamp = new Date(value).getTime();
+      if (Number.isFinite(timestamp) && timestamp > now) candidates.push(timestamp);
+    }
+  }
+  return candidates.length ? Math.min(...candidates) : null;
+}
+
+function scheduleOperationalRefresh() {
+  if (boundaryTimer) clearTimeout(boundaryTimer);
+  const boundary = nextOperationalBoundary();
+  if (!boundary) return;
+  const delay = Math.max(1000, boundary - Date.now() + 500);
+  boundaryTimer = setTimeout(async () => {
+    if (refreshInProgress) return scheduleOperationalRefresh();
+    try {
+      if (remoteMode) await reloadRemote();
+      else renderApp();
+    } catch (error) { toast(error.message || 'Automatic shift refresh failed.', true); }
+  }, delay);
 }
 
 function navButton(view, icon, label, badge = 0) {
