@@ -40,8 +40,8 @@ The shared application uses Supabase Free for Postgres, anonymous sessions and R
 
 1. Create a Supabase project on the Free plan.
 2. In Supabase Authentication settings, enable **Anonymous Sign-Ins**. There is no email, password or logout flow in this app.
-3. Open the Supabase SQL Editor and run `supabase/migrations/202611010001_initial_schema.sql`.
-4. Edit `supabase/seed.sql`: replace the 14 sample member names and replace the 14 individual-code placeholders in `supabase/seed.sql` with unique random codes of at least 16 characters. Keep every real code out of Git and share each code privately with its matching colleague. Run the edited seed SQL once.
+3. Open the Supabase SQL Editor and run both migrations in order: `supabase/migrations/202611010001_initial_schema.sql`, then `supabase/migrations/202611020001_individual_member_access_codes.sql`.
+4. Edit `supabase/seed.sql`: replace the 14 sample member names and all 14 individual-code placeholders in `supabase/seed.sql` with unique random codes of at least 16 characters. The legacy workspace code placeholder is unused after the second migration. Keep every real code out of Git and share each code privately with its matching colleague. Run the edited seed SQL once.
 5. Set `supabaseUrl` and the **publishable/anon key** in `site/config.js`. Never use a Supabase `service_role` key in browser code.
 6. Deploy the repository to Netlify with `site` as the publish directory. No build command is required.
 7. Share the deployed URL with the team and give each colleague only their own individual access code. The code selects their profile automatically; no roster picker or password/account is shown.
@@ -58,7 +58,7 @@ This is a **low-friction, trust-based team identity model**, not verified employ
 2. Approved leave and approved unavailability remove that employee from the queue for the approved time window.
 3. A scheduled break removes the employee only during the break window.
 4. A pending request does **not** affect eligibility.
-5. The queue rotates through the full roster order after the last recorded recipient, skipping people who are currently ineligible. Skipping does not move the pointer.
+5. The queue rotates through the full roster order after the last recorded recipient, skipping people who are currently ineligible. A successful allocation advances the pointer immediately in the same database transaction; completion does not control the rotation.
 6. Only the current email assignee can approve/reject requests or record the next allocation; the assignee cannot decide their own request.
 7. Any mapped team member may take over allocation responsibility. Every handover is recorded, and pending requests remain pending for the new assignee.
 8. Shift swaps affect one date only and are applied only after the invited colleague accepts.
