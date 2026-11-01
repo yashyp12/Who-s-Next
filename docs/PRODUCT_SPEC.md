@@ -20,10 +20,10 @@ The app resolves the colleague's profile from their individual access code; no p
 4. Colleague submits a meeting, KT, RDP/technical issue, extended break, late-login, early-logout, leave or other request with an explicit start/end window.
 5. The request is visible as pending. Pending requests do not change availability.
 6. The current email assignee reviews the request, records any manager/SME/TL confirmation, and approves or rejects it.
-7. Approved requests affect availability only during the approved interval. Breaks affect availability only during their planned interval.
+7. Approved requests affect availability only during the approved interval. Breaks affect availability only during their planned interval. When a break ends, the colleague automatically returns to their normal round-robin position; an explicit break extension adds another unavailable interval, while an approved issue/request continues to exclude them for its approved window.
 8. The dashboard calculates the eligible roster. The queue order is circular, based on roster `sort_order` and the last employee who actually received an allocation.
-9. The current assignee manually allocates an email in Outlook (outside this application), then records the allocation in WHO'S next. The database records the recipient, assignee, timestamp and optional reference. The rotation pointer advances immediately in the same transaction as the successful allocation; email completion never gates the next assignment.
-10. Any teammate can take over allocation responsibility. The previous and next assignee and the handover timestamp are retained. Pending approval requests are not reassigned or lost; the new owner sees the same pending queue.
+9. The current assignee manually allocates an email in Outlook (outside this application), then records the allocation in WHO'S next. The database records the recipient, assigner (the signed-in member resolved from their individual access code), optional email subject/reference and server-generated timestamp. The UI displays the full date/time to seconds. The rotation pointer advances immediately in the same transaction as the successful allocation; email completion never gates the next assignment.
+10. Any teammate can take over allocation responsibility. The previous and next assignee and the handover timestamp are retained. When the current owner leaves their scheduled shift or becomes unavailable, the server automatically hands responsibility to the earliest-starting eligible on-shift colleague. This changes the shared allocation role, not the individual's browser session. Pending approval requests are not reassigned or lost; the new owner sees the same pending queue.
 11. A one-day shift swap is proposed by one colleague and applied only when the invited colleague accepts.
 12. Employees can record lightweight shift check-in/check-out events. Reports read historical allocation, request, shift, attendance and handover records rather than only current status.
 
@@ -47,7 +47,7 @@ The database allocation function applies the same schedule, approved-request and
 - The next candidate is the first eligible roster member after the last allocation's `sort_order`, wrapping to the beginning.
 - Skipping an ineligible person never modifies the pointer.
 - The pointer advances immediately and only in the same database transaction that inserts an allocation record. Completion status is independent and must never advance or rewind the pointer.
-- Only the currently mapped assignee can record an allocation.
+- Only the currently mapped shift allocation owner can record an allocation. The server re-evaluates shift ownership before each allocation.
 
 ## Shift conventions
 
@@ -90,7 +90,7 @@ The frontend uses Supabase Realtime Broadcast notifications to ask connected bro
 - [ ] Submit a pending meeting request and verify the person remains eligible.
 - [ ] Approve the request as current assignee and verify they are skipped only during its approved interval.
 - [ ] Try approving as a non-assignee and verify the database rejects it.
-- [ ] Record allocations from two browsers in quick succession and verify the round-robin pointer does not duplicate or skip a turn.
+- [ ] Record allocations from two browsers in quick succession and verify the round-robin pointer does not duplicate or skip a turn.\n- [ ] Record an optional email subject and verify the recipient, assigner, subject and server timestamp (seconds) appear in the timeline and CSV export.\n- [ ] Verify the digital clock shows workspace time with seconds.\n- [ ] Verify a break expiry returns the colleague to the queue and a break extension keeps them unavailable.\n- [ ] Verify shift end automatically hands allocation responsibility to the next eligible shift colleague without logging out the previous colleague's browser.
 - [ ] Hand over allocation responsibility and verify the previous assignee can no longer approve or allocate.
 - [ ] Accept a one-day shift swap as the invited colleague and verify only that date changes.
 - [ ] Verify check-in cannot be repeated before check-out, and check-out cannot be recorded before check-in.
