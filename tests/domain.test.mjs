@@ -46,6 +46,8 @@ test('recording an allocation advances the pointer exactly once', () => {
   const result = recordAllocation({ lastAllocatedMemberId: 'm1' }, members, { id: 'a1', assignedBy: 'operator', assignedAt: context.now, context });
   assert.equal(result.allocation.memberId, 'm2');
   assert.equal(result.state.lastAllocatedMemberId, 'm2');
+  const withSubject = recordAllocation({ lastAllocatedMemberId: 'm1' }, members, { id: 'a2', assignedBy: 'operator', assignedAt: context.now, emailSubject: 'VPN access issue', context });
+  assert.equal(withSubject.allocation.emailSubject, 'VPN access issue');
 });
 
 test('each successful allocation immediately advances the next recipient regardless of prior completion', () => {
@@ -72,6 +74,18 @@ test('time and request validators reject invalid ranges', () => {
 test('duration formatting is stable', () => {
   assert.equal(formatDuration(125), '2h 5m');
   assert.equal(formatDuration(40), '40m');
+});
+
+test('a colleague automatically returns to the eligible queue after their break ends', () => {
+  const members = [
+    member('m1'),
+    member('m2', { breaks: [{ date: context.date, start: '11:00', end: '12:30' }] }),
+    member('m3'),
+  ];
+  const duringBreak = { ...context, time: '12:00' };
+  const afterBreak = { ...context, time: '12:30' };
+  assert.deepEqual(buildRotation(members, 'm1', duringBreak).map((m) => m.id), ['m3', 'm1']);
+  assert.deepEqual(buildRotation(members, 'm1', afterBreak).map((m) => m.id), ['m2', 'm3', 'm1']);
 });
 
 test('rotation skips unavailable employees without moving the pointer', () => {
