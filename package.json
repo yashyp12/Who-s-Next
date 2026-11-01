@@ -1,0 +1,11 @@
+{
+  "name": "whos-next",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shift-aware team availability and fair email allocation workspace.",
+  "scripts": {
+    "test": "node --test",
+    "serve": "python -m http.server 4173 --directory site"
+  }
+}

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#10151c" />
+    <meta name="description" content="WHO'S next — know who's available, keep the shift moving, and distribute work fairly." />
+    <title>WHO'S next — Team operations</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <script src="/config.js"></script>
+  </head>
+  <body>
+    <div id="app" class="app-shell">
+      <div class="boot-screen"><span class="brand-mark">W</span><p>Preparing your workspace…</p></div>
+    </div>
+    <dialog id="action-dialog" class="dialog">
+      <form method="dialog" class="dialog-dismiss"><button class="icon-button" aria-label="Close">×</button></form>
+      <div id="dialog-content"></div>
+    </dialog>
+    <script type="module" src="/src/app.mjs"></script>
+  </body>
+</html>
