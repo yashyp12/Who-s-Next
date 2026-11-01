@@ -1,12 +1,12 @@
--- Replace the sample employee names and the workspace code before inviting colleagues.
--- Keep the real team code out of Git. This file intentionally uses a known placeholder.
+-- Replace sample employee names and all 14 individual-code placeholders before inviting colleagues.
+-- The legacy workspace code is retained only for schema compatibility; the app no longer accepts it.
 
 insert into public.workspaces (id, name, timezone, join_code_hash)
 values (
   '10000000-0000-4000-8000-000000000001',
   'Operations Team',
   'Asia/Kolkata',
-  encode(extensions.digest('REPLACE-WITH-A-LONG-TEAM-CODE', 'sha256'), 'hex')
+  encode(extensions.digest('LEGACY-CODE-DISABLED-AFTER-INDIVIDUAL-CODE-MIGRATION', 'sha256'), 'hex')
 )
 on conflict (id) do nothing;
 
