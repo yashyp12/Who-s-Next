@@ -78,7 +78,7 @@ Every request requires a reason, start and end. Leave should use the actual leav
 
 ## Realtime and concurrency
 
-The frontend uses Supabase Realtime Broadcast notifications to ask connected browsers to reload their authorized dashboard snapshot after a write. Database functions remain the source of truth. The UI notification is not relied upon for correctness; a browser reload always fetches the latest snapshot.
+The frontend uses Supabase Realtime Broadcast notifications to ask connected browsers to reload their authorized dashboard snapshot after a write. Database functions remain the source of truth. The UI notification is not relied upon for correctness; a browser reload always fetches the latest snapshot. While open, the client schedules a refresh at the next shift, break or approved-request boundary, and the digital clock updates every second.
 
 ## Acceptance checklist before sharing with colleagues
 
