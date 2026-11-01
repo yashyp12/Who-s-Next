@@ -111,6 +111,7 @@ export function recordAllocation(state, members, allocation) {
     assignedBy: allocation.assignedBy,
     assignedAt: allocation.assignedAt,
     reference: allocation.reference?.trim() || null,
+    emailSubject: allocation.emailSubject?.trim() || null,
   };
   return {
     state: { ...state, lastAllocatedMemberId: next.id },
