@@ -465,12 +465,38 @@ function openShiftDialog(existingId = null) {
   $('#shift-preset')?.addEventListener('change', (event) => { const preset = SHIFT_PRESETS[event.target.value]; if (preset) { $('#shift-start').value = preset.start; $('#shift-end').value = preset.end; } });
 }
 
+function currentBreakForMember() {
+  const date = localDate();
+  const time = localTime();
+  const previousDate = new Date(`${date}T00:00:00Z`);
+  previousDate.setUTCDate(previousDate.getUTCDate() - 1);
+  const previous = previousDate.toISOString().slice(0, 10);
+  return state.breaks.find((item) => item.memberId === currentMemberId && (
+    (item.date === date && (item.start < item.end ? time >= item.start && time < item.end : time >= item.start)) ||
+    (item.date === previous && item.start > item.end && time < item.end)
+  )) || null;
+}
+
 function openBreakDialog(extension = false) {
   const now = new Date();
-  const defaultEnd = localTime(addMinutes(now, 30));
+  const activeBreak = extension ? currentBreakForMember() : null;
+  let breakDate = localDate(now);
+  let breakStart = localTime(now);
+  let defaultEnd = localTime(addMinutes(now, 30));
+  if (activeBreak) {
+    breakDate = activeBreak.date;
+    if (activeBreak.start > activeBreak.end) {
+      const nextDate = new Date(`${activeBreak.date}T00:00:00Z`);
+      nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+      breakDate = nextDate.toISOString().slice(0, 10);
+    }
+    breakStart = activeBreak.end;
+    const extensionStart = new Date(workspaceInputToIso(`${breakDate}T${breakStart}`));
+    defaultEnd = localTime(addMinutes(extensionStart, 30));
+  }
   openDialog(extension ? 'Extend your current break' : 'Plan a break',
-    extension ? 'Add extra break time from now. Your availability will return automatically when the extended window ends.' : 'A planned break removes you from the allocation queue only during its scheduled window.',
-    `<div class="form-grid"><div class="field"><label for="break-date">Date</label><input id="break-date" name="date" type="date" required value="${localDate()}" /></div><div class="field"><label for="break-note">Break type / note</label><input id="break-note" name="note" maxlength="100" value="${extension ? 'Break extension' : 'Scheduled break'}" required /></div><div class="field"><label for="break-start">Start</label><input id="break-start" name="start" type="time" required value="${localTime(now)}" /></div><div class="field"><label for="break-end">End</label><input id="break-end" name="end" type="time" required value="${defaultEnd}" /></div></div>`,
+    extension ? 'The extension starts when your current break was due to end. You return to the queue when the extended window ends.' : 'A planned break removes you from the allocation queue only during its scheduled window.',
+    `<div class="form-grid"><div class="field"><label for="break-date">Date</label><input id="break-date" name="date" type="date" required value="${breakDate}" /></div><div class="field"><label for="break-note">Break type / note</label><input id="break-note" name="note" maxlength="100" value="${extension ? 'Break extension' : 'Scheduled break'}" required /></div><div class="field"><label for="break-start">Start</label><input id="break-start" name="start" type="time" required value="${breakStart}" /></div><div class="field"><label for="break-end">End</label><input id="break-end" name="end" type="time" required value="${defaultEnd}" /></div></div>`,
     extension ? 'Extend break' : 'Save break', async (form) => {
       const item = { id: id(), memberId: currentMemberId, date: form.get('date'), start: form.get('start'), end: form.get('end'), note: form.get('note').trim() };
       const error = validateTimeRange(item.start, item.end); if (error) throw new Error(error);
