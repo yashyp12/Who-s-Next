@@ -270,7 +270,8 @@ function startWorkspaceClock() {
     const clock = $('#workspace-clock');
     if (clock) clock.textContent = new Intl.DateTimeFormat(undefined, { timeZone: state?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(now);
     const minuteKey = [now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes()].join('-');
-    if (minuteKey !== lastRefreshMinute && !refreshInProgress) {
+    if (lastRefreshMinute === null) lastRefreshMinute = minuteKey;
+    else if (minuteKey !== lastRefreshMinute && !refreshInProgress) {
       lastRefreshMinute = minuteKey;
       if (remoteMode) reloadRemote().catch((error) => toast(error.message || 'Automatic shift refresh failed.', true));
       else renderApp();
