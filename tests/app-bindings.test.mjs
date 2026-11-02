@@ -6,18 +6,17 @@ const appSource = await readFile(new URL('../site/src/app.mjs', import.meta.url)
 const cssSource = await readFile(new URL('../site/src/styles.css', import.meta.url), 'utf8');
 const bindingSource = appSource.match(/function bindViewActions\(\) \{([\s\S]*?)\n\}/)?.[1];
 
-test('admin controls use plural selectors before iterating', () => {
+test('admin control collections use querySelectorAll before iteration', () => {
   assert.ok(bindingSource, 'bindViewActions must exist');
   for (const selector of ['[data-admin-rotate]', '[data-admin-toggle]', '[data-admin-name]', '[data-admin-shift]']) {
-    assert.match(bindingSource, new RegExp('\\$\\$\\(' + JSON.stringify(selector).replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&') + '\\)\\.forEach'));
-    assert.doesNotMatch(bindingSource, new RegExp('(?<!\\$)\\$\\(' + JSON.stringify(selector).replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&') + '\\)\\.forEach'));
+    assert.ok(bindingSource.includes(`document.querySelectorAll('${selector}')`), `Expected a collection selector for ${selector}`);
   }
 });
 
 test('controls duplicated in hidden and active views bind every matching element', () => {
   assert.ok(bindingSource, 'bindViewActions must exist');
   for (const selector of ['#take-over', '#record-next', '#add-break', '#set-shift']) {
-    assert.match(bindingSource, new RegExp('\\$\\$\\(' + JSON.stringify(selector).replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&') + '\\)\\.forEach'));
+    assert.ok(bindingSource.includes(`document.querySelectorAll('${selector}')`), `Expected all matching controls for ${selector}`);
   }
 });
 
