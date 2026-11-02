@@ -214,8 +214,14 @@ function currentMember() { return state?.members.find((member) => member.id === 
 function currentAssignee() { return state?.members.find((member) => member.id === state.currentAssigneeId) || null; }
 function contextNow() { return { now: new Date().toISOString(), date: localDate(), time: localTime() }; }
 function eligibleMembers() { return getEligibleMembers(domainMembers(), contextNow()); }
-function queueMembers() {
-  return buildRotation(domainMembers(), state.lastAllocatedMemberId, contextNow());
+function queueMembers(existingTicket = false) {
+  if (!existingTicket) return buildRotation(domainMembers(), state.lastAllocatedMemberId, contextNow());
+  const eligible = domainMembers().filter((member) => {
+    const status = getMemberStatus(member, contextNow());
+    return member.active !== false && ['available','technical','rdp','meeting'].includes(status.code);
+  }).sort((x,y) => (x.sortOrder ?? 0) - (y.sortOrder ?? 0) || x.name.localeCompare(y.name));
+  const lastIndex = eligible.findIndex((member) => member.id === state.lastAllocatedMemberId);
+  return lastIndex < 0 ? eligible : [...eligible.slice(lastIndex + 1), ...eligible.slice(0,lastIndex + 1)];
 }
 function isCurrentAssignee() { return Boolean(currentMemberId && currentMemberId === state.currentAssigneeId); }
 function logActivity(text, icon = '•') {
@@ -265,6 +271,10 @@ function renderApp() {
   bindViewActions();
   startWorkspaceClock();
   scheduleOperationalRefresh();
+  if (remoteMode && !state.shifts.some((shift) => shift.memberId === currentMemberId) && !sessionStorage.getItem(`whos-next-shift-setup-${currentMemberId}`)) {
+    sessionStorage.setItem(`whos-next-shift-setup-${currentMemberId}`, 'shown');
+    window.setTimeout(() => openShiftDialog(), 250);
+  }
 }
 
 function startWorkspaceClock() {
@@ -301,6 +311,8 @@ function nextOperationalBoundary() {
     const endDate = item.end <= item.start ? addCalendarDays(item.date, 1) : item.date;
     addLocalBoundary(item.date, item.start);
     addLocalBoundary(endDate, item.end);
+    const reminderAt = new Date(workspaceInputToIso(`${item.date}T${item.start}`)).getTime() - 5 * 60000;
+    if (Number.isFinite(reminderAt) && reminderAt > now) candidates.push(reminderAt);
   }
   for (const request of state.requests || []) {
     if (request.status !== 'approved') continue;
@@ -318,6 +330,11 @@ function scheduleOperationalRefresh() {
   if (!boundary) return;
   const delay = Math.max(1000, boundary - Date.now() + 500);
   boundaryTimer = setTimeout(async () => {
+    const reminder = (state.breaks || []).find((item) => {
+      const startAt = new Date(workspaceInputToIso(`${item.date}T${item.start}`)).getTime();
+      return startAt > Date.now() && startAt - Date.now() <= 5 * 60000 + 3000 && startAt - Date.now() >= 4 * 60000;
+    });
+    if (reminder) toast(`${reminder.breakType === 'meal' ? 'Meal break' : 'BioBreak'} starts in 5 minutes.`);
     if (refreshInProgress) return scheduleOperationalRefresh();
     try {
       if (remoteMode) await reloadRemote();
@@ -398,7 +415,7 @@ function renderSchedule(me) {
   const breaks = state.breaks.filter((item) => item.memberId === currentMemberId).sort((a, b) => `${a.date}${a.start}`.localeCompare(`${b.date}${b.start}`));
   return `<div class="page-toolbar"><div><div class="panel-title">Your shifts & breaks</div><div class="panel-subtitle">Manage only your own schedule. Changes are retained in history.</div></div><div class="toolbar-actions"><button class="button button-secondary" id="add-break">＋ Add break</button><button class="button button-secondary" id="new-shift-swap">⇄ Request swap</button><button class="button button-primary" id="set-shift">＋ Set shift</button></div></div>
     <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Scheduled shifts</div><div class="panel-subtitle">${shifts.length} shift record(s)</div></div></div><div class="schedule-list">${shifts.length ? shifts.map((shift) => `<div class="schedule-row"><div><strong>${prettyDate(shift.date)}</strong><small style="display:block">${escapeHtml(SHIFT_PRESETS[shift.key]?.label || shift.key || 'Custom shift')}</small></div><div>${shift.start}</div><div>${shift.end}</div><div><button class="button button-secondary button-small" data-edit-shift="${shift.id}">Edit</button></div></div>`).join('') : '<div class="empty-state">No shifts have been entered. Add your first shift to appear in the team schedule.</div>'}</div></section>
-    <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Planned breaks</div><div class="panel-subtitle">Breaks are used to calculate eligibility during the selected time window</div></div></div><div class="schedule-list">${breaks.length ? breaks.map((item) => `<div class="schedule-row"><div><strong>${prettyDate(item.date)}</strong><small style="display:block">${escapeHtml(item.note || 'Scheduled break')}</small></div><div>${item.start}</div><div>${item.end}</div><div><span class="status muted">Scheduled</span></div></div>`).join('') : '<div class="empty-state">No breaks planned yet.</div>'}</div></section>
+    <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Planned breaks</div><div class="panel-subtitle">Breaks are used to calculate eligibility during the selected time window</div></div></div><div class="schedule-list">${breaks.length ? breaks.map((item) => `<div class="schedule-row"><div><strong>${prettyDate(item.date)}</strong><small style="display:block">${item.breakType === 'meal' ? 'Meal break' : 'BioBreak'} · ${escapeHtml(item.note || 'Scheduled break')}</small></div><div>${item.start}</div><div>${item.end}</div><div><span class="status muted">Scheduled</span></div></div>`).join('') : '<div class="empty-state">No breaks planned yet.</div>'}</div></section>
     <section class="panel"><div class="panel-head"><div><div class="panel-title">One-day shift swaps</div><div class="panel-subtitle">A swap takes effect only after the invited colleague accepts</div></div></div><div class="request-list">${(state.shiftSwaps || []).filter((swap) => swap.requesterMemberId === currentMemberId || swap.partnerMemberId === currentMemberId).length ? (state.shiftSwaps || []).filter((swap) => swap.requesterMemberId === currentMemberId || swap.partnerMemberId === currentMemberId).map(renderShiftSwapCard).join('') : '<div class="empty-state">No shift swap requests involving you.</div>'}</div></section>`;
 }
 
@@ -425,7 +442,8 @@ function renderRequests(me) {
 function renderAllocation(me, assignee) {
   const queue = queueMembers();
   const today = state.allocations.filter((item) => localDate(new Date(item.assignedAt)) === localDate());
-  return `<div class="page-toolbar"><div><div class="panel-title">Round-robin queue</div><div class="panel-subtitle">Unavailable colleagues automatically return to the queue when their break or approved time window ends.</div></div><div class="toolbar-actions"><button class="button button-secondary" id="take-over" ${isCurrentAssignee() ? 'disabled' : ''}>Take over responsibility</button><button class="button button-primary" id="record-next" ${queue.length && isCurrentAssignee() ? '' : 'disabled'}>Record next allocation →</button></div></div>
+  const myStatus = getMemberStatus(domainMembers().find((member) => member.id === currentMemberId), contextNow());
+  return `<div class="page-toolbar"><div><div class="panel-title">Round-robin queue</div><div class="panel-subtitle">Unavailable colleagues automatically return to the queue when their break or approved time window ends.</div></div><div class="toolbar-actions"><button class="button button-secondary" id="take-over" ${isCurrentAssignee() ? 'disabled' : ''}>Take over responsibility</button><button class="button button-secondary" id="record-ticket" ${isCurrentAssignee() ? '' : 'disabled'}>Route existing ticket</button><button class="button button-primary" id="record-next" ${queue.length && isCurrentAssignee() ? '' : 'disabled'}>Record new email →</button></div></div>${myStatus.code === 'break' ? `<div class="notice break-active-notice">You are on ${escapeHtml(myStatus.reason)} until ${prettyTime(myStatus.returnAt)}. New email allocation is paused during your break.</div>` : ''}
     <div class="notice">Assign the email in Outlook first, then record it here. WHO'S next captures the recipient, assigner, optional subject/reference and exact server timestamp. The next colleague becomes first in line immediately after the record succeeds.</div>
     <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Current responsibility</div><div class="panel-subtitle">Automatically follows the active shift when the current owner goes off shift or becomes unavailable</div></div></div><div class="assignee-card"><span class="avatar">${assignee ? initials(assignee.name) : '?'}</span><div class="assignee-meta"><strong>${escapeHtml(assignee?.name || 'Not assigned')}</strong><small>${isCurrentAssignee() ? 'You are currently responsible for allocation' : 'Current allocation owner'}</small></div></div><div class="muted-copy">Your profile remains signed in. Only the shared allocation responsibility changes at shift handover.</div></section>
     <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Next eligible sequence</div><div class="panel-subtitle">${queue.length} people ready · last allocation to ${escapeHtml(state.members.find((m) => m.id === state.lastAllocatedMemberId)?.name || 'nobody yet')}</div></div></div><div class="queue-list">${queue.length ? queue.map((member, index) => `<div class="queue-item"><span class="queue-number">${String(index + 1).padStart(2, '0')}</span><span class="avatar">${initials(member.name)}</span><div class="queue-person"><strong>${escapeHtml(member.name)}</strong><small>${escapeHtml(SHIFT_PRESETS[member.shiftKey || member.shift?.key]?.label || 'Scheduled shift')}</small></div><span class="queue-tag">ELIGIBLE</span></div>`).join('') : '<div class="empty-state">No eligible employees at the moment.</div>'}</div></section>
@@ -460,7 +478,8 @@ function bindViewActions() {
   $$('[data-go]').forEach((button) => button.addEventListener('click', () => { activeView = button.dataset.go; renderApp(); }));
   $('#take-over')?.addEventListener('click', takeOver);
   $('#attendance-toggle')?.addEventListener('click', recordAttendance);
-  $('#record-next')?.addEventListener('click', () => openAllocationDialog());
+  $('#record-next')?.addEventListener('click', () => openAllocationDialog(false));
+  $('#record-ticket')?.addEventListener('click', () => openAllocationDialog(true));
   $('#add-break')?.addEventListener('click', () => openBreakDialog(false));
   $('#extend-break')?.addEventListener('click', () => openBreakDialog(true));
   $('#set-shift')?.addEventListener('click', () => openShiftDialog());
@@ -540,29 +559,30 @@ function openBreakDialog(extension = false) {
   }
   openDialog(extension ? 'Extend your current break' : 'Plan a break',
     extension ? 'The extension starts when your current break was due to end. You return to the queue when the extended window ends.' : 'A planned break removes you from the allocation queue only during its scheduled window.',
-    `<div class="form-grid"><div class="field"><label for="break-date">Date</label><input id="break-date" name="date" type="date" required value="${breakDate}" /></div><div class="field"><label for="break-note">Break type / note</label><input id="break-note" name="note" maxlength="100" value="${extension ? 'Break extension' : 'Scheduled break'}" required /></div><div class="field"><label for="break-start">Start</label><input id="break-start" name="start" type="time" required value="${breakStart}" /></div><div class="field"><label for="break-end">End</label><input id="break-end" name="end" type="time" required value="${defaultEnd}" /></div></div>`,
+    `<div class="form-grid"><div class="field"><label for="break-date">Date</label><input id="break-date" name="date" type="date" required value="${breakDate}" /></div><div class="field"><label for="break-type">Break type</label><select id="break-type" name="breakType"><option value="bio">BioBreak</option><option value="meal">Meal break</option></select></div><div class="field"><label for="break-note">Note (optional)</label><input id="break-note" name="note" maxlength="100" value="${extension ? 'Break extension' : 'Scheduled break'}" /></div><div class="field"><label for="break-start">Start</label><input id="break-start" name="start" type="time" required value="${breakStart}" /></div><div class="field"><label for="break-end">End</label><input id="break-end" name="end" type="time" required value="${defaultEnd}" /></div></div>`,
     extension ? 'Extend break' : 'Save break', async (form) => {
-      const item = { id: id(), memberId: currentMemberId, date: form.get('date'), start: form.get('start'), end: form.get('end'), note: form.get('note').trim() };
+      const item = { id: id(), memberId: currentMemberId, date: form.get('date'), start: form.get('start'), end: form.get('end'), note: form.get('note').trim(), breakType: form.get('breakType') || 'bio' };
       const error = validateTimeRange(item.start, item.end); if (error) throw new Error(error);
       if (!isBreakWithinShift(item, state.shifts)) throw new Error('The break must fit inside one of your scheduled shifts. Add your shift first or adjust the break window.');
-      if (remoteMode) await rpc('add_break', { p_work_date: item.date, p_start: item.start, p_end: item.end, p_note: item.note });
+      if (remoteMode) await rpc('add_break', { p_work_date: item.date, p_start: item.start, p_end: item.end, p_note: item.note || null, p_break_type: item.breakType });
       else { state.breaks.push(item); logActivity(`${currentMember().name} ${extension ? 'extended a break' : 'planned a break'} for ${prettyDate(item.date)}.`, '◷'); saveDemoState(); }
       await refreshAfterAction(extension ? 'Break extended. You will return to the queue when the extension ends.' : 'Break saved.');
     });
 }
 
-function openAllocationDialog() {
+function openAllocationDialog(existingTicket = false) {
   if (!isCurrentAssignee()) return toast('Only the current shift assignee can record an allocation.', true);
-  const queue = queueMembers();
+  const queue = queueMembers(existingTicket);
   const target = queue[0];
   if (!target) return toast('No employee is currently eligible for allocation.', true);
-  openDialog('Record email assignment', `The next eligible colleague is ${target.name}. After you assign the email in Outlook, record it here. The queue advances immediately.`, `<div class="notice">Next recipient: <strong>${escapeHtml(target.name)}</strong>. Your name (${escapeHtml(currentMember().name)}) will be stored as the assigner.</div><div class="field"><label for="allocation-subject">Email subject (optional)</label><input id="allocation-subject" name="subject" maxlength="200" placeholder="e.g. VPN access issue - Bangalore team" /></div><div class="field" style="margin-top:12px"><label for="allocation-reference">Ticket / email reference (optional)</label><input id="allocation-reference" name="reference" maxlength="100" placeholder="e.g. INC0012345" /></div>`, 'Confirm assignment', async (form) => {
+  openDialog(existingTicket ? 'Route existing ticket' : 'Record new email', `The next eligible colleague is ${target.name}. ${existingTicket ? 'Existing tickets may be routed to colleagues in troubleshooting or meeting status.' : 'Only available colleagues can receive a new email.'} The queue advances immediately.`, `<div class="notice">Next recipient: <strong>${escapeHtml(target.name)}</strong>. Your name (${escapeHtml(currentMember().name)}) will be stored as the assigner.</div><div class="field"><label for="allocation-subject">Email subject (optional)</label><input id="allocation-subject" name="subject" maxlength="200" placeholder="e.g. VPN access issue - Bangalore team" /></div><div class="field" style="margin-top:12px"><label for="allocation-reference">Ticket / email reference (optional)</label><input id="allocation-reference" name="reference" maxlength="100" placeholder="e.g. INC0012345" /></div>`, 'Confirm assignment', async (form) => {
     const subject = form.get('subject').trim();
     const reference = form.get('reference').trim();
-    if (remoteMode) await rpc('record_next_allocation', { p_reference: reference || null, p_subject: subject || null });
+    if (remoteMode) await rpc('record_next_allocation', { p_reference: reference || null, p_subject: subject || null, p_existing_ticket: existingTicket });
     else {
       const result = recordAllocation({ lastAllocatedMemberId: state.lastAllocatedMemberId }, domainMembers(), { id: id(), assignedBy: currentMemberId, assignedAt: new Date().toISOString(), reference, emailSubject: subject, context: contextNow() });
       state.lastAllocatedMemberId = result.state.lastAllocatedMemberId;
+      result.allocation.allocationKind = existingTicket ? 'existing_ticket' : 'new_email';
       state.allocations.unshift(result.allocation);
       logActivity(`${currentMember().name} assigned an email to ${target.name}${subject ? ` · ${subject}` : ''}.`, '⇄');
       saveDemoState();
