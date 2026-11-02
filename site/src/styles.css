@@ -242,3 +242,5 @@
 @media (prefers-reduced-motion: reduce) {
   .nav button,.button { transition:none !important; }
 }
+
+/* Trigger CI against the current stacked base. */
