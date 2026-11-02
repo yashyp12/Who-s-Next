@@ -216,9 +216,11 @@ function contextNow() { return { now: new Date().toISOString(), date: localDate(
 function eligibleMembers() { return getEligibleMembers(domainMembers(), contextNow()); }
 function queueMembers(existingTicket = false) {
   if (!existingTicket) return buildRotation(domainMembers(), state.lastAllocatedMemberId, contextNow());
-  const eligible = getTicketEligibleMembers(domainMembers(), contextNow());
-  const lastIndex = eligible.findIndex((member) => member.id === state.lastAllocatedMemberId);
-  return lastIndex < 0 ? eligible : [...eligible.slice(lastIndex + 1), ...eligible.slice(0,lastIndex + 1)];
+  const roster = [...domainMembers()].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
+  const eligibleIds = new Set(getTicketEligibleMembers(roster, contextNow()).map((member) => member.id));
+  const lastIndex = roster.findIndex((member) => member.id === state.lastAllocatedMemberId);
+  const rotated = lastIndex < 0 ? roster : [...roster.slice(lastIndex + 1), ...roster.slice(0, lastIndex + 1)];
+  return rotated.filter((member) => eligibleIds.has(member.id));
 }
 function isCurrentAssignee() { return Boolean(currentMemberId && currentMemberId === state.currentAssigneeId); }
 function logActivity(text, icon = '•') {
