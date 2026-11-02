@@ -216,10 +216,7 @@ function contextNow() { return { now: new Date().toISOString(), date: localDate(
 function eligibleMembers() { return getEligibleMembers(domainMembers(), contextNow()); }
 function queueMembers(existingTicket = false) {
   if (!existingTicket) return buildRotation(domainMembers(), state.lastAllocatedMemberId, contextNow());
-  const eligible = domainMembers().filter((member) => {
-    const status = getMemberStatus(member, contextNow());
-    return member.active !== false && ['available','technical','rdp','meeting'].includes(status.code);
-  }).sort((x,y) => (x.sortOrder ?? 0) - (y.sortOrder ?? 0) || x.name.localeCompare(y.name));
+  const eligible = getTicketEligibleMembers(domainMembers(), contextNow());
   const lastIndex = eligible.findIndex((member) => member.id === state.lastAllocatedMemberId);
   return lastIndex < 0 ? eligible : [...eligible.slice(lastIndex + 1), ...eligible.slice(0,lastIndex + 1)];
 }
