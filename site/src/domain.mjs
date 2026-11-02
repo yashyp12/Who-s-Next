@@ -72,7 +72,13 @@ export function getMemberStatus(member, context) {
     if (b.date === date) return start < end ? currentMinutes >= start && currentMinutes < end : currentMinutes >= start;
     return b.date === previous && start > end && currentMinutes < end;
   });
-  if (activeBreak) return { code: 'break', label: 'On break', tone: 'warning', returnAt: `${activeBreak.date}T${activeBreak.end}:00`, reason: activeBreak.note || 'Scheduled break' };
+  if (activeBreak) {
+    const returnDate = activeBreak.start > activeBreak.end && time >= activeBreak.start
+      ? new Date(Date.parse(`${activeBreak.date}T00:00:00Z`) + 86400000).toISOString().slice(0,10)
+      : activeBreak.date;
+    const breakLabel = activeBreak.breakType === 'meal' ? 'Meal break' : 'BioBreak';
+    return { code: 'break', label: breakLabel, tone: 'warning', returnAt: `${returnDate}T${activeBreak.end}:00`, reason: breakLabel };
+  }
 
   return { code: 'available', label: 'Available', tone: 'success', returnAt: null, reason: 'Eligible for allocation' };
 }
