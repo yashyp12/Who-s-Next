@@ -24,6 +24,8 @@ let toastTimer = null;
 let clockTimer = null;
 let boundaryTimer = null;
 let refreshInProgress = false;
+let sidebarCollapsed = localStorage.getItem('whos-next-sidebar-collapsed') === 'true';
+let autoCheckInInProgress = false;
 
 const partsInTimezone = (date, timeZone) => { const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(date); return Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value])); };
 const partsInWorkspace = (date = new Date()) => partsInTimezone(date, state?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);
@@ -163,6 +165,7 @@ async function reloadRemote() {
     const { data, error } = await supabase.rpc('get_dashboard');
     if (error) throw error;
     state = mapDashboard(data || {});
+    await maybeAutoCheckIn();
     renderApp();
   } finally { refreshInProgress = false; }
 }
@@ -249,9 +252,9 @@ function renderApp() {
   };
   const assignee = currentAssignee();
   $('#app').innerHTML = `
-    <div class="layout">
+    <div class="layout ${sidebarCollapsed ? 'sidebar-collapsed' : ''}">
       <aside class="sidebar">
-        <div><div class="brand"><span class="brand-mark">W</span><div class="brand-copy">WHO'S <span>next</span></div></div><div class="workspace-tag">${escapeHtml(state.workspaceName)}</div></div>
+        <div><div class="brand"><img class="brand-wordmark" src="/whos-next-logo.svg" alt="WHO'S next" /></div><div class="workspace-tag">${escapeHtml(state.workspaceName)}</div></div>
         <div><div class="nav-label">Workspace</div><nav class="nav" aria-label="Main navigation">
           ${navButton('allocation','⇄','Allocate')}${navButton('overview','⌂','Team overview')}${navButton('schedule','▦','My profile')}${navButton('requests','↗','Requests',counts.pending)}${navButton('reports','▤','Reports')}${currentIsAdmin ? navButton('admin','⚙','Admin') : ''}
         </nav></div>
@@ -261,7 +264,7 @@ function renderApp() {
         </div>
       </aside>
       <main class="main">
-        <header class="topbar"><div><div class="eyebrow">${activeView === 'overview' ? 'Live operations' : 'Team workspace'}</div><h1 class="page-title">${viewTitle(activeView)}</h1></div><div class="top-actions"><span id="workspace-clock" class="digital-clock" aria-label="Workspace time">--:--:--</span>${remoteMode ? '<span class="live-pill"><i class="live-dot"></i> Live sync</span>' : '<span class="demo-pill">● Local preview</span>'}<button class="button button-secondary button-small" id="refresh-workspace">↻ Refresh</button><button class="button button-secondary button-small" id="new-request-top">＋ New request</button></div></header>
+        <header class="topbar"><div><div class="eyebrow">${activeView === 'overview' ? 'Live operations' : 'Team workspace'}</div><h1 class="page-title">${viewTitle(activeView)}</h1></div><div class="top-actions"><button class="button button-secondary button-small utility-icon-button" id="sidebar-toggle" type="button" aria-label="${sidebarCollapsed ? 'Show' : 'Hide'} sidebar" title="${sidebarCollapsed ? 'Show' : 'Hide'} sidebar">☰</button>${remoteMode ? '<button class="button button-secondary button-small utility-icon-button" id="sign-out" type="button" aria-label="Sign out" title="Sign out">↪</button>' : ''}<span id="workspace-clock" class="digital-clock" aria-label="Workspace time">--:--:--</span>${remoteMode ? '<span class="live-pill"><i class="live-dot"></i> Live sync</span>' : '<span class="demo-pill">● Local preview</span>'}<button class="button button-secondary button-small" id="refresh-workspace">↻ Refresh</button><button class="button button-secondary button-small" id="new-request-top">＋ New request</button></div></header>
         <section class="section-view ${activeView === 'overview' ? 'active' : ''}" id="view-overview">${renderOverview(me, assignee, counts, statuses)}</section>
         <section class="section-view ${activeView === 'schedule' ? 'active' : ''}" id="view-schedule">${renderSchedule(me)}</section>
         <section class="section-view ${activeView === 'requests' ? 'active' : ''}" id="view-requests">${renderRequests(me)}</section>
@@ -273,6 +276,8 @@ function renderApp() {
   if (remoteMode) initializeNotificationCenter({ supabase, memberId: currentMemberId });
   $$('.nav button').forEach((button) => button.addEventListener('click', () => { activeView = button.dataset.view; renderApp(); }));
   $('#new-request-top')?.addEventListener('click', openRequestDialog);
+  $('#sidebar-toggle')?.addEventListener('click', toggleSidebar);
+  $('#sign-out')?.addEventListener('click', signOut);
   $('#refresh-workspace')?.addEventListener('click', async () => { try { if (remoteMode) await reloadRemote(); else renderApp(); toast('Workspace refreshed.'); } catch (error) { toast(error.message || 'Refresh failed.', true); } });
   $('#demo-profile')?.addEventListener('change', (event) => { currentMemberId = event.target.value; localStorage.setItem(PROFILE_KEY, currentMemberId); renderApp(); });
   bindViewActions();
@@ -373,6 +378,56 @@ function statCard(label, value, sub, icon) {
 function statusPill(status) { return `<span class="status ${status.tone}">${escapeHtml(status.label)}</span>`; }
 function returnLabel(status) { return status.returnAt ? `Until ${prettyTime(status.returnAt)}` : status.code === 'available' ? 'Ready for allocation' : '—'; }
 
+async function maybeAutoCheckIn() {
+  if (!remoteMode || !currentMemberId || autoCheckInInProgress) return;
+  const member = domainMembers().find((item) => item.id === currentMemberId);
+  if (!member?.shift) return;
+  const status = getMemberStatus(member, contextNow());
+  if (status.code === 'off_shift' || status.code === 'leave') return;
+  const shiftStart = new Date(workspaceInputToIso(`${member.shift.date}T${member.shift.start}`)).getTime();
+  const latest = latestAttendanceForCurrentMember();
+  if (latest && new Date(latest.occurredAt).getTime() >= shiftStart) return;
+
+  autoCheckInInProgress = true;
+  try {
+    const { data, error } = await supabase.rpc('record_attendance', { p_event_type: 'check_in' });
+    if (error) {
+      if (!/already checked in/i.test(error.message || '')) console.warn('Automatic shift check-in was not recorded:', error.message);
+      return;
+    }
+    state.attendance.unshift({ id: data.event_id, memberId: currentMemberId, eventType: 'check_in', occurredAt: new Date().toISOString() });
+  } catch (error) {
+    console.warn('Automatic shift check-in was not recorded:', error);
+  } finally {
+    autoCheckInInProgress = false;
+  }
+}
+
+function toggleSidebar() {
+  sidebarCollapsed = !sidebarCollapsed;
+  localStorage.setItem('whos-next-sidebar-collapsed', String(sidebarCollapsed));
+  $('.layout')?.classList.toggle('sidebar-collapsed', sidebarCollapsed);
+  const button = $('#sidebar-toggle');
+  if (button) {
+    button.setAttribute('aria-label', `${sidebarCollapsed ? 'Show' : 'Hide'} sidebar`);
+    button.title = `${sidebarCollapsed ? 'Show' : 'Hide'} sidebar`;
+  }
+}
+
+async function signOut() {
+  if (!remoteMode || !supabase) return;
+  const button = $('#sign-out');
+  if (button) button.disabled = true;
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+    window.location.reload();
+  } catch (error) {
+    toast(error.message || 'Unable to sign out.', true);
+    if (button) button.disabled = false;
+  }
+}
+
 function latestAttendanceForCurrentMember() {
   return (state.attendance || []).filter((event) => event.memberId === currentMemberId).sort((a, b) => new Date(b.occurredAt) - new Date(a.occurredAt))[0] || null;
 }
@@ -465,13 +520,14 @@ function renderAllocation(me, assignee) {
     <div class="notice">Assign the email in Outlook first, then record it here. WHO'S next captures the recipient, assigner, optional subject/reference and exact server timestamp. The next colleague becomes first in line immediately after the record succeeds.</div>
     <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Current responsibility</div><div class="panel-subtitle">Automatically follows the active shift when the current owner goes off shift or becomes unavailable</div></div></div><div class="assignee-card"><span class="avatar">${assignee ? initials(assignee.name) : '?'}</span><div class="assignee-meta"><strong>${escapeHtml(assignee?.name || 'Not assigned')}</strong><small>${isCurrentAssignee() ? 'You are currently responsible for allocation' : 'Current allocation owner'}</small></div></div><div class="muted-copy">Your profile remains signed in. Only the shared allocation responsibility changes at shift handover.</div></section>
     <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Next eligible sequence</div><div class="panel-subtitle">${queue.length} people ready · last allocation to ${escapeHtml(state.members.find((m) => m.id === state.lastAllocatedMemberId)?.name || 'nobody yet')}</div></div></div><div class="queue-list">${queue.length ? queue.map((member, index) => `<div class="queue-item"><span class="queue-number">${String(index + 1).padStart(2, '0')}</span><span class="avatar">${initials(member.name)}</span><div class="queue-person"><strong>${escapeHtml(member.name)}</strong><small>${escapeHtml(SHIFT_PRESETS[member.shiftKey || member.shift?.key]?.label || 'Scheduled shift')}</small></div><span class="queue-tag">ELIGIBLE</span></div>`).join('') : '<div class="empty-state">No eligible employees at the moment.</div>'}</div></section>
-    <section class="panel"><div class="panel-head"><div><div class="panel-title">Today’s allocation log</div><div class="panel-subtitle">${today.length} assignment(s) recorded today · newest first</div></div></div><div class="schedule-list">${today.length ? today.map((item) => `<div class="schedule-row allocation-row"><div><strong>${escapeHtml(state.members.find((m) => m.id === item.memberId)?.name || 'Unknown member')}</strong><small style="display:block">Assigned by ${escapeHtml(state.members.find((m) => m.id === item.assignedBy)?.name || 'Unknown')}</small>${item.emailSubject ? `<small class="allocation-subject">${escapeHtml(item.emailSubject)}</small>` : ''}</div><div>${prettyDateTime(item.assignedAt)}</div><div>${escapeHtml(item.reference || 'No reference')}</div><div><span class="status success">Recorded</span></div></div>`).join('') : '<div class="empty-state">No assignments recorded today.</div>'}</div></section>`;
+    <section class="panel allocation-log-panel"><div class="panel-head"><div><div class="panel-title">Today’s allocation log</div><div class="panel-subtitle">${today.length} assignments · newest first</div></div></div><div class="allocation-log"><div class="allocation-log-head"><span>Recipient</span><span>Assigned by</span><span>Time</span><span>Ticket / subject</span></div>${today.length ? today.map(renderAllocationTimelineItem).join('') : '<div class="empty-state">No assignments recorded today.</div>'}</div></section>`;
 }
 
 function renderAllocationTimelineItem(item) {
   const recipient = state.members.find((member) => member.id === item.memberId)?.name || 'Unknown recipient';
   const assigner = state.members.find((member) => member.id === item.assignedBy)?.name || 'Unknown assigner';
-  return `<div class="schedule-row allocation-row"><div><strong>${escapeHtml(recipient)}</strong><small style="display:block">Assigned by ${escapeHtml(assigner)}</small>${item.emailSubject ? `<small class="allocation-subject">${escapeHtml(item.emailSubject)}</small>` : ''}</div><div>${prettyDateTime(item.assignedAt)}</div><div>${escapeHtml(item.reference || 'No reference')}</div><div><span class="status success">Assigned</span></div></div>`;
+  const kind = item.allocationKind === 'existing_ticket' ? 'Existing ticket' : 'New email';
+  return `<article class="allocation-log-item"><div class="allocation-log-cell"><small>Recipient</small><strong>${escapeHtml(recipient)}</strong></div><div class="allocation-log-cell"><small>Assigned by</small><strong>${escapeHtml(assigner)}</strong></div><div class="allocation-log-cell"><small>Time</small><strong>${prettyDateTime(item.assignedAt)}</strong><span class="allocation-kind">${kind}</span></div><div class="allocation-log-cell allocation-ticket-cell"><small>Ticket / subject</small><strong class="allocation-ticket">${escapeHtml(item.reference || 'No ticket number')}</strong>${item.emailSubject ? `<span class="allocation-subject">${escapeHtml(item.emailSubject)}</span>` : ''}</div></article>`;
 }
 
 async function loadAdminRoster() {
