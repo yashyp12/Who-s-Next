@@ -476,22 +476,7 @@ grant execute on function public.add_break(date,time,time,text,text) to authenti
 revoke execute on function public.admin_list_members() from public, anon;
 grant execute on function public.admin_list_members() to authenticated;
 
--- Presence is safe for same-workspace reads and powers immediate status updates.
-create policy member_presence_same_workspace_read on public.member_presence
-for select to authenticated
-using (exists (
-  select 1 from public.member_sessions s
-  where s.auth_user_id=auth.uid() and s.workspace_id=member_presence.workspace_id
-));
-grant select on public.member_presence to authenticated;
-do $$
-begin
-  if exists(select 1 from pg_publication where pubname='supabase_realtime')
-     and not exists(select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='member_presence') then
-    alter publication supabase_realtime add table public.member_presence;
-  end if;
-end;
-$$;
+-- Presence is exposed only through the scoped security-definer RPC.
 
 create or replace function public.get_dashboard()
 returns jsonb
