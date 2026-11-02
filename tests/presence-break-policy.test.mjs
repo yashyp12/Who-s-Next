@@ -7,7 +7,7 @@ const migration = await readFile(new URL('../supabase/migrations/202611020008_pr
 
 test('presence heartbeat exposes active, away and stale offline states', () => {
   assert.match(migration, /presence_state text not null default 'active'/);
-  assert.match(migration, /p\.last_seen_at <= now\(\)-interval '90 seconds'/);
+  assert.match(migration, /last_seen_at <= now\(\)\s*-\s*interval '90 seconds'/);
   assert.match(migration, /heartbeat_member_presence\(p_state text default 'active'\)/);
   assert.match(app, /setInterval\(syncPresence, 20000\)/);
   assert.match(app, /5 \* 60 \* 1000 \? 'away' : 'active'/);
