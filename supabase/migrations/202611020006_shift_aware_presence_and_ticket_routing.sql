@@ -188,3 +188,8 @@ $$;
 
 
 
+
+revoke execute on function public.record_next_allocation(text, text, boolean) from public, anon;
+grant execute on function public.record_next_allocation(text, text, boolean) to authenticated;
+revoke execute on function public.add_break(date, time, time, text, text) from public, anon;
+grant execute on function public.add_break(date, time, time, text, text) to authenticated;
