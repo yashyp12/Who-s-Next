@@ -8,6 +8,7 @@ let audioContext = null;
 let root = null;
 let initialLoadComplete = false;
 let pollTimer = null;
+let notificationFetchInProgress = false;
 const seenNotificationIds = new Set();
 const SOUND_KEY = 'whos-next-notification-sound';
 
@@ -51,17 +52,21 @@ function playNotificationSound() {
   if (!soundEnabled || !audioContext) return;
   try {
     if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
+    const now = audioContext.currentTime;
     const oscillator = audioContext.createOscillator();
     const gain = audioContext.createGain();
-    oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
-    gain.gain.setValueAtTime(0.0001, audioContext.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.14, audioContext.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.28);
+    oscillator.type = 'triangle';
+    oscillator.frequency.setValueAtTime(660, now);
+    oscillator.frequency.setValueAtTime(880, now + 0.13);
+    oscillator.frequency.setValueAtTime(990, now + 0.26);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.11, now + 0.018);
+    gain.gain.setValueAtTime(0.075, now + 0.12);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.39);
     oscillator.connect(gain);
     gain.connect(audioContext.destination);
-    oscillator.start();
-    oscillator.stop(audioContext.currentTime + 0.29);
+    oscillator.start(now);
+    oscillator.stop(now + 0.4);
   } catch { /* Browser audio permissions must never interrupt workspace actions. */ }
 }
 
@@ -141,6 +146,7 @@ function renderList() {
         const { error } = await activeClient.rpc('mark_my_notification_read', { p_notification_id: notificationId });
         if (error) throw error;
         item.readAt = new Date().toISOString();
+        notifications = notifications.filter((entry) => entry.id !== notificationId);
         renderList();
       } catch (error) {
         console.error('Unable to mark notification as read:', error);
@@ -150,10 +156,12 @@ function renderList() {
 }
 
 async function loadNotifications({ notify = false } = {}) {
-  if (!activeClient || !activeMemberId) return;
-  const { data, error } = await activeClient.rpc('get_my_notifications', { p_limit: 30 });
-  if (error) throw error;
-  const next = Array.isArray(data) ? data : [];
+  if (!activeClient || !activeMemberId || notificationFetchInProgress) return;
+  notificationFetchInProgress = true;
+  try {
+    const { data, error } = await activeClient.rpc('get_my_notifications', { p_limit: 30 });
+    if (error) throw error;
+    const next = (Array.isArray(data) ? data : []).filter((item) => !item.readAt);
   if (!initialLoadComplete) {
     notifications = next;
     next.forEach((item) => { if (item.id) seenNotificationIds.add(item.id); });
@@ -171,7 +179,10 @@ async function loadNotifications({ notify = false } = {}) {
     });
     next.forEach((item) => { if (item.id) seenNotificationIds.add(item.id); });
   }
-  renderList();
+    renderList();
+  } finally {
+    notificationFetchInProgress = false;
+  }
 }
 
 function subscribe(client, memberId) {
@@ -220,11 +231,17 @@ export function initializeNotificationCenter({ supabase, memberId }) {
     if (pollTimer) window.clearInterval(pollTimer);
     pollTimer = window.setInterval(() => {
       loadNotifications({ notify: true }).catch((error) => console.error('Notification sync failed:', error));
-    }, 8000);
+    }, 3000);
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') loadNotifications({ notify: true }).catch((error) => console.error('Notification refresh failed:', error));
+      if (document.visibilityState === 'visible') {
+        if (audioContext?.state === 'suspended') audioContext.resume().catch(() => {});
+        loadNotifications({ notify: true }).catch((error) => console.error('Notification refresh failed:', error));
+      }
     });
-    window.addEventListener('focus', () => loadNotifications({ notify: true }).catch((error) => console.error('Notification refresh failed:', error)));
+    window.addEventListener('focus', () => {
+      if (audioContext?.state === 'suspended') audioContext.resume().catch(() => {});
+      loadNotifications({ notify: true }).catch((error) => console.error('Notification refresh failed:', error));
+    });
   }
   const topActions = document.querySelector('.top-actions');
   if (!topActions) return;
