@@ -96,3 +96,25 @@ test('logout performs atomic server-side handover to the next eligible colleague
   assert.match(reconciliation, /'automatic_handover'/);
   assert.match(reconciliation, /'No eligible colleague is on shift; allocation responsibility is unassigned'/);
 });
+
+
+test('workspace sidebar remains open and no collapse controls are rendered', () => {
+  assert.match(app, /const sidebarCollapsed = false/);
+  assert.doesNotMatch(app, /id="sidebar-toggle"/);
+  assert.doesNotMatch(app, /function toggleSidebar\(/);
+  assert.match(styles, /\.layout\.sidebar-collapsed > \.sidebar \{ display: flex !important; \}/);
+});
+
+test('workspace clock always renders a fallback and safely handles invalid workspace timezones', () => {
+  const clock = app.slice(app.indexOf('function startWorkspaceClock()'), app.indexOf('function addCalendarDays'));
+  assert.match(clock, /clock\.textContent = now\.toLocaleTimeString/);
+  assert.match(clock, /timeZone: workspaceTimezone[\s\S]*?\} catch \(error\)/);
+  assert.match(clock, /Local device time \(workspace timezone is invalid\)/);
+});
+
+test('logout relies on one atomic offline-and-handover RPC, not a second reconciliation call', () => {
+  const signOut = app.slice(app.indexOf('async function signOut()'), app.indexOf('function latestAttendanceForCurrentMember()'));
+  assert.match(signOut, /supabase\.rpc\('set_member_offline'\)/);
+  assert.doesNotMatch(signOut, /supabase\.rpc\('ensure_shift_assignee'/);
+  assert.match(signOut, /atomically removes presence and reconciles allocation/);
+});

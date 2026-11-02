@@ -33,7 +33,7 @@ let refreshInProgress = false;
 let refreshQueued = false;
 let realtimeRefreshTimer = null;
 let hourlyReconcileTimer = null;
-let sidebarCollapsed = localStorage.getItem('whos-next-sidebar-collapsed') === 'true';
+const sidebarCollapsed = false;
 let profileMenuOpen = false;
 let autoCheckInInProgress = false;
 
@@ -355,7 +355,7 @@ function renderApp() {
   $('#app').innerHTML = `
     <div class="layout ${sidebarCollapsed ? 'sidebar-collapsed' : ''}">
       <aside class="sidebar">
-        <div><div class="brand sidebar-brand-row"><button class="button button-secondary button-small utility-icon-button sidebar-toggle-button" id="sidebar-toggle" type="button" aria-expanded="${!sidebarCollapsed}" aria-label="${sidebarCollapsed ? 'Show' : 'Hide'} sidebar" title="${sidebarCollapsed ? 'Show' : 'Hide'} sidebar">☰</button><img class="brand-wordmark" src="/whos-next-logo.svg" alt="WHO'S next" /></div><div class="workspace-tag">${escapeHtml(state.workspaceName)}</div></div>
+        <div><div class="brand sidebar-brand-row"><img class="brand-wordmark" src="/whos-next-logo.svg" alt="WHO'S next" /></div><div class="workspace-tag">${escapeHtml(state.workspaceName)}</div></div>
         <div><div class="nav-label">Workspace</div><nav class="nav" aria-label="Main navigation">
           ${navButton('allocation','⇄','Allocate')}${navButton('overview','⌂','Team overview')}${navButton('schedule','▦','My profile')}${navButton('requests','↗','Requests',counts.pending)}${navButton('reports','▤','Reports')}${currentIsAdmin ? navButton('admin','⚙','Admin') : ''}
         </nav></div>
@@ -365,7 +365,7 @@ function renderApp() {
         </div>
       </aside>
       <main class="main">
-        <header class="topbar"><div class="topbar-title-wrap">${sidebarCollapsed ? '<button class="button button-secondary button-small utility-icon-button" id="sidebar-toggle" type="button" aria-expanded="false" aria-label="Show sidebar" title="Show sidebar">☰</button>' : ''}<div><div class="eyebrow">${activeView === 'overview' ? 'Live operations' : 'Team workspace'}</div><h1 class="page-title">${viewTitle(activeView)}</h1></div></div><span id="workspace-clock" class="digital-clock" aria-label="Workspace time">--:--:--</span><div class="top-actions"><button class="button button-secondary button-small" id="new-request-top">＋ New request</button><button class="button button-secondary button-small" id="refresh-workspace">↻ Refresh</button><div class="notification-center" aria-label="Notifications"></div>${remoteMode ? '<span class="live-pill"><i class="live-dot"></i> Live sync</span>' : '<span class="demo-pill">● Local preview</span>'}<button class="mobile-profile-toggle" id="profile-menu-mobile-toggle" type="button" aria-label="Account menu" aria-expanded="${profileMenuOpen}">${initials(me.name)}</button>${profileMenuOpen ? '<div class="mobile-profile-popover"><button type="button" id="profile-sign-out-mobile">↪ Sign out</button></div>' : ''}</div></header>
+        <header class="topbar"><div class="topbar-title-wrap"><div><div class="eyebrow">${activeView === 'overview' ? 'Live operations' : 'Team workspace'}</div><h1 class="page-title">${viewTitle(activeView)}</h1></div></div><span id="workspace-clock" class="digital-clock" aria-label="Workspace time">--:--:--</span><div class="top-actions"><button class="button button-secondary button-small" id="new-request-top">＋ New request</button><button class="button button-secondary button-small" id="refresh-workspace">↻ Refresh</button><div class="notification-center" aria-label="Notifications"></div>${remoteMode ? '<span class="live-pill"><i class="live-dot"></i> Live sync</span>' : '<span class="demo-pill">● Local preview</span>'}<button class="mobile-profile-toggle" id="profile-menu-mobile-toggle" type="button" aria-label="Account menu" aria-expanded="${profileMenuOpen}">${initials(me.name)}</button>${profileMenuOpen ? '<div class="mobile-profile-popover"><button type="button" id="profile-sign-out-mobile">↪ Sign out</button></div>' : ''}</div></header>
         <section class="section-view ${activeView === 'overview' ? 'active' : ''}" id="view-overview">${renderOverview(me, assignee, counts, statuses)}</section>
         <section class="section-view ${activeView === 'schedule' ? 'active' : ''}" id="view-schedule">${renderSchedule(me)}</section>
         <section class="section-view ${activeView === 'requests' ? 'active' : ''}" id="view-requests">${renderRequests(me)}</section>
@@ -378,7 +378,6 @@ function renderApp() {
   if (remoteMode) initializeNotificationCenter({ supabase, memberId: currentMemberId });
   $$('.nav button').forEach((button) => button.addEventListener('click', () => { activeView = button.dataset.view; renderApp(); }));
   $('#new-request-top')?.addEventListener('click', openRequestDialog);
-  $('#sidebar-toggle')?.addEventListener('click', toggleSidebar);
   $('#profile-menu-toggle')?.addEventListener('click', () => { profileMenuOpen = !profileMenuOpen; renderApp(); });
   $('#profile-menu-mobile-toggle')?.addEventListener('click', () => { profileMenuOpen = !profileMenuOpen; renderApp(); });
   $('#profile-sign-out')?.addEventListener('click', signOut);
@@ -398,8 +397,31 @@ function renderApp() {
 
 function startWorkspaceClock() {
   const update = () => {
+    const now = new Date();
     const clock = $('#workspace-clock');
-    if (clock) clock.textContent = new Intl.DateTimeFormat(undefined, { timeZone: state?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date());
+    if (clock) {
+      // Paint a local-time fallback first so a bad workspace timezone can
+      // never leave the visible clock stuck on its placeholder.
+      clock.textContent = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+      const workspaceTimezone = typeof state?.timezone === 'string' ? state.timezone.trim() : '';
+      if (workspaceTimezone) {
+        try {
+          clock.textContent = new Intl.DateTimeFormat(undefined, {
+            timeZone: workspaceTimezone,
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false,
+          }).format(now);
+          clock.title = `Workspace time · ${workspaceTimezone}`;
+        } catch (error) {
+          console.warn('Invalid workspace timezone; displaying local time instead:', error);
+          clock.title = 'Local device time (workspace timezone is invalid)';
+        }
+      } else {
+        clock.title = 'Local device time';
+      }
+    }
     const countdown = $('#break-countdown');
     if (countdown) {
       const member = domainMembers().find((entry) => entry.id === currentMemberId);
@@ -509,12 +531,6 @@ async function maybeAutoCheckIn() {
   }
 }
 
-function toggleSidebar() {
-  sidebarCollapsed = !sidebarCollapsed;
-  localStorage.setItem('whos-next-sidebar-collapsed', String(sidebarCollapsed));
-  renderApp();
-}
-
 async function signOut() {
   if (!remoteMode || !supabase) return;
   const alternatives = queueMembers().filter((member) => member.id !== currentMemberId);
@@ -528,10 +544,13 @@ async function signOut() {
       const { error: checkoutError } = await supabase.rpc('record_attendance', { p_event_type: 'check_out' });
       if (checkoutError) throw checkoutError;
     }
-    const { error: offlineError } = await supabase.rpc('set_member_offline');
+    // set_member_offline atomically removes presence and reconciles allocation
+    // ownership in the same database transaction (migration 011).
+    const { data: offlineResult, error: offlineError } = await supabase.rpc('set_member_offline');
     if (offlineError) throw offlineError;
-    const { error: handoverError } = await supabase.rpc('ensure_shift_assignee');
-    if (handoverError) throw handoverError;
+    if (offlineResult?.handover?.changed === false && offlineResult?.handover?.current_assignee_id === currentMemberId) {
+      throw new Error('Logout did not release your allocation responsibility. Please retry or contact an SME.');
+    }
     stopPresenceTracking();
     const { error } = await supabase.auth.signOut();
     if (error) throw error;

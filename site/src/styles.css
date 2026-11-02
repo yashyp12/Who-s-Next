@@ -564,3 +564,10 @@
  .top-actions .mobile-profile-toggle{display:none}
 }
 @media(prefers-reduced-motion:reduce){.layout,.layout>.sidebar,.layout.sidebar-collapsed>.sidebar{transition:none!important}}
+
+
+/* Keep workspace navigation permanently open; the collapse control is retired. */
+.layout { grid-template-columns: 248px minmax(0, 1fr) !important; }
+.layout.sidebar-collapsed { grid-template-columns: 248px minmax(0, 1fr) !important; }
+.layout.sidebar-collapsed > .sidebar { display: flex !important; }
+.sidebar-toggle-button { display: none !important; }
