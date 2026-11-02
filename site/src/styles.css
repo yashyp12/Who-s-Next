@@ -544,7 +544,7 @@
 .layout{grid-template-columns:238px minmax(0,1fr);transition:grid-template-columns .28s cubic-bezier(.2,.75,.25,1)}
 .layout>.sidebar{min-width:0;overflow:hidden;opacity:1;transform:translateX(0);transition:opacity .2s ease,transform .28s ease,padding .28s ease,border-color .28s ease}
 .layout.sidebar-collapsed{grid-template-columns:0 minmax(0,1fr)}
-.layout.sidebar-collapsed>.sidebar{width:0;min-width:0;padding-left:0;padding-right:0;border-right-color:transparent;opacity:0;transform:translateX(-14px);pointer-events:none}
+.layout.sidebar-collapsed>.sidebar{display:flex;width:0;min-width:0;padding-left:0;padding-right:0;border-right-color:transparent;opacity:0;transform:translateX(-14px);pointer-events:none}
 @media(max-width:1100px){.topbar{gap:14px}.top-actions{gap:7px}.top-actions .button{padding:9px 10px}}
 @media(max-width:900px){
  .topbar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px}
