@@ -20,12 +20,12 @@ let adminRoster = [];
 let adminRosterLoaded = false;
 let workspaceId = null;
 let realtimeChannel = null;
-let presenceChannel = null;
 let presenceTimer = null;
 let presenceRefreshTimer = null;
 let presenceState = 'active';
 let presenceBusy = false;
 let lastPresenceActivity = Date.now();
+let lastActivityPersistedAt = 0;
 let toastTimer = null;
 let clockTimer = null;
 let boundaryTimer = null;
@@ -202,7 +202,9 @@ function startPresenceTracking() {
   };
   const markActivity = () => {
     lastPresenceActivity = Date.now();
-    try { localStorage.setItem(activityKey, String(lastPresenceActivity)); } catch { /* In-memory activity remains available. */ }
+    if (lastPresenceActivity - lastActivityPersistedAt >= 5000) {
+      try { localStorage.setItem(activityKey, String(lastPresenceActivity)); lastActivityPersistedAt = lastPresenceActivity; } catch { /* In-memory activity remains available. */ }
+    }
     if (document.visibilityState === 'visible' && presenceState !== 'active') {
       heartbeatPresence('active').then(refreshPresence).catch((error) => console.warn('Presence update failed:', error));
     }
