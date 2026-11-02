@@ -32,3 +32,18 @@ test('access-code submission shows a spinner and restores the button after failu
   assert.match(app, /class="button-spinner"/);
   assert.match(app, /button\.removeAttribute\('aria-busy'\)/);
 });
+
+
+test('workspace header centers the timer and orders top actions', () => {
+ const header=app.match(/<header class="topbar">([\\s\\S]*?)<\\/header>/)?.[1]||'';
+ assert.ok(header.indexOf('id="workspace-clock"')>header.indexOf('topbar-title-wrap'));
+ assert.ok(header.indexOf('id="new-request-top"')<header.indexOf('id="refresh-workspace"'));
+ assert.ok(header.indexOf('id="refresh-workspace"')<header.indexOf('class="notification-center"'));
+ assert.ok(header.indexOf('class="notification-center"')<header.indexOf('class="live-pill"'));
+ assert.match(styles,/grid-template-columns:238px minmax\\(0,1fr\\)/);
+});
+test('sidebar collapse and expand use smooth desktop and mobile transitions',()=>{
+ assert.match(app,/id="sidebar-toggle" type="button" aria-expanded=/);
+ assert.match(styles,/transition:grid-template-columns \.28s/);
+ assert.match(styles,/max-height \.25s ease/);
+});
