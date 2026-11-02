@@ -40,7 +40,7 @@ test('admin shift report is date-scoped and the dashboard hides past dates from 
 
 test('workspace refresh broadcasts are emitted for operational changes', () => {
   assert.match(migration, /realtime\.send\([\s\S]*?'refresh'[\s\S]*?'whos-next-'/);
-  assert.match(migration, /'allocations','allocation_state','handovers','shift_swap_requests','attendance_events','member_presence'/);
+  for (const table of ['allocations', 'allocation_state', 'handovers', 'shift_swap_requests', 'attendance_events', 'member_presence']) assert.ok(migration.includes(`'${table}'`));
   assert.match(app, /\.on\('broadcast', \{ event: 'refresh' \}/);
   assert.match(app, /60 \* 60 \* 1000/);
 });
