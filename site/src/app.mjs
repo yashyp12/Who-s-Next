@@ -851,9 +851,9 @@ function bindViewActions() {
   document.querySelectorAll('#set-shift').forEach((button) => button.addEventListener('click', () => openShiftDialog()));
   $('#new-shift-swap')?.addEventListener('click', openShiftSwapDialog);
   $('#new-request-profile')?.addEventListener('click', openRequestDialog);
-  $('[data-edit-own-request]').forEach((button) => button.addEventListener('click', () => openRequestDialog(button.dataset.editOwnRequest)));
-  $('[data-withdraw-request]').forEach((button) => button.addEventListener('click', () => withdrawOwnRequest(button.dataset.withdrawRequest)));
-  $('[data-swap-response]').forEach((button) => button.addEventListener('click', () => respondShiftSwap(button.dataset.swapResponse, button.dataset.accept === 'true')));
+  $$('[data-edit-own-request]').forEach((button) => button.addEventListener('click', () => openRequestDialog(button.dataset.editOwnRequest)));
+  $$('[data-withdraw-request]').forEach((button) => button.addEventListener('click', () => withdrawOwnRequest(button.dataset.withdrawRequest)));
+  $$('[data-swap-response]').forEach((button) => button.addEventListener('click', () => respondShiftSwap(button.dataset.swapResponse, button.dataset.accept === 'true')));
   $('#new-request-page')?.addEventListener('click', openRequestDialog);
   $$('[data-review]').forEach((button) => button.addEventListener('click', () => reviewRequest(button.dataset.review, button.dataset.decision)));
   $$('[data-edit-shift]').forEach((button) => button.addEventListener('click', () => openShiftDialog(button.dataset.editShift)));
