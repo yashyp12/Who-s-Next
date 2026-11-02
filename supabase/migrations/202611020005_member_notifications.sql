@@ -248,6 +248,23 @@ revoke execute on function public.mark_my_notification_read(uuid) from public, a
 grant execute on function public.get_my_notifications(integer) to authenticated;
 grant execute on function public.mark_my_notification_read(uuid) to authenticated;
 
+
+-- Realtime SELECT is limited to the member mapped to the current anonymous auth session.
+create policy notifications_select_own
+  on public.notifications
+  for select
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.member_sessions s
+      where s.auth_user_id = auth.uid()
+        and s.workspace_id = notifications.workspace_id
+        and s.member_id = notifications.recipient_member_id
+    )
+  );
+grant select on public.notifications to authenticated;
+
 -- Supabase Realtime delivers only rows selected by the member-specific filter in the client.
 do $$
 begin
