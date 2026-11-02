@@ -30,3 +30,23 @@ test('mobile admin navigation has six columns and top actions can wrap', () => {
   assert.match(cssSource, /\.nav:has\(button\[data-view="admin"\]\)[\s\S]*?grid-template-columns:\s*repeat\(6,/);
   assert.match(cssSource, /\.top-actions\s*\{[^}]*flex-wrap:\s*wrap/s);
 });
+
+test('workspace includes persistent sidebar controls, sign-out and shift auto check-in', () => {
+  assert.match(appSource, /id="sidebar-toggle"/);
+  assert.match(appSource, /id="sign-out"/);
+  assert.match(appSource, /await maybeAutoCheckIn\(\)/);
+  assert.match(appSource, /record_attendance', \{ p_event_type: 'check_in' \}/);
+});
+
+test('allocation history separates recipient, assigner, time and ticket details', () => {
+  for (const label of ['Recipient', 'Assigned by', 'Time', 'Ticket / subject']) {
+    assert.ok(appSource.includes(label), `Missing allocation log field: ${label}`);
+  }
+  assert.match(appSource, /allocation-log-item/);
+});
+
+test('compact layout controls do not overflow and sidebar can collapse', () => {
+  assert.match(cssSource, /\.layout\.sidebar-collapsed/);
+  assert.match(cssSource, /\.allocation-log-item/);
+  assert.match(cssSource, /\.toolbar-actions/);
+});
