@@ -2,6 +2,7 @@ import {
   SHIFT_PRESETS, REQUEST_TYPES, getMemberStatus, getEligibleMembers,
   recordAllocation, buildRotation, validateTimeRange, validateRequestPeriod, isBreakWithinShift, formatDuration,
 } from './domain.mjs';
+import { initializeNotificationCenter } from './notifications.mjs';
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -256,7 +257,8 @@ function renderApp() {
         <section class="section-view ${activeView === 'reports' ? 'active' : ''}" id="view-reports">${renderReports()}</section>
       </main>
     </div>`;
-  $$('.nav button').forEach((button) => button.addEventListener('click', () => { activeView = button.dataset.view; renderApp(); }));
+  if (remoteMode) initializeNotificationCenter({ supabase, memberId: currentMemberId });
+  $('.nav button').forEach((button) => button.addEventListener('click', () => { activeView = button.dataset.view; renderApp(); }));
   $('#new-request-top')?.addEventListener('click', openRequestDialog);
   $('#refresh-workspace')?.addEventListener('click', async () => { try { if (remoteMode) await reloadRemote(); else renderApp(); toast('Workspace refreshed.'); } catch (error) { toast(error.message || 'Refresh failed.', true); } });
   $('#demo-profile')?.addEventListener('change', (event) => { currentMemberId = event.target.value; localStorage.setItem(PROFILE_KEY, currentMemberId); renderApp(); });
