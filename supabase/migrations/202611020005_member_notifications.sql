@@ -71,9 +71,41 @@ set search_path = public, pg_temp
 as $$
 declare
   v_actor_name text;
+  v_next_name text;
+  v_today date;
+  v_now time;
+  v_timezone text;
+  v_last_order integer;
 begin
   select name into v_actor_name from public.members
   where id = new.assigned_by_member_id and workspace_id = new.workspace_id;
+  select timezone into v_timezone from public.workspaces where id = new.workspace_id;
+  v_today := (now() at time zone v_timezone)::date;
+  v_now := (now() at time zone v_timezone)::time;
+  select sort_order into v_last_order from public.members
+  where id = new.recipient_member_id and workspace_id = new.workspace_id;
+
+  select m.name into v_next_name
+  from public.members m
+  where m.workspace_id = new.workspace_id and m.active
+    and exists (
+      select 1 from public.shifts s where s.workspace_id = m.workspace_id and s.member_id = m.id and (
+        (s.work_date = v_today and ((s.start_time < s.end_time and v_now >= s.start_time and v_now < s.end_time) or (s.start_time > s.end_time and v_now >= s.start_time)))
+        or (s.work_date = v_today - 1 and s.start_time > s.end_time and v_now < s.end_time)
+      )
+    )
+    and not exists (
+      select 1 from public.breaks b where b.workspace_id = m.workspace_id and b.member_id = m.id and (
+        (b.work_date = v_today and ((b.start_time < b.end_time and v_now >= b.start_time and v_now < b.end_time) or (b.start_time > b.end_time and v_now >= b.start_time)))
+        or (b.work_date = v_today - 1 and b.start_time > b.end_time and v_now < b.end_time)
+      )
+    )
+    and not exists (
+      select 1 from public.availability_requests r where r.workspace_id = m.workspace_id and r.member_id = m.id
+        and r.status = 'approved' and r.start_at <= now() and r.end_at > now()
+    )
+  order by case when v_last_order is null or m.sort_order > v_last_order then 0 else 1 end, m.sort_order
+  limit 1;
   perform public.create_member_notification(
     new.workspace_id,
     new.recipient_member_id,
@@ -82,7 +114,8 @@ begin
     'A new email was assigned to you',
     coalesce(v_actor_name, 'A teammate') || ' assigned an email to you'
       || case when nullif(new.reference, '') is not null then ' · ' || new.reference else '' end
-      || case when nullif(new.email_subject, '') is not null then ' · ' || new.email_subject else '' end,
+      || case when nullif(new.email_subject, '') is not null then ' · ' || new.email_subject else '' end
+      || case when v_next_name is not null then ' · Next turn: ' || v_next_name else ' · No next eligible member right now' end,
     'allocation',
     new.id
   );
