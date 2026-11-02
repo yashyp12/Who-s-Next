@@ -2,6 +2,11 @@
   command = "node scripts/generate-config.mjs"
   publish = "site"
 
+[build.environment]
+  # This file intentionally contains the public Supabase browser URL and publishable key.
+  # Keep secret scanning enabled for every other file and build output.
+  SECRETS_SCAN_OMIT_PATHS = "site/config.js"
+
 [[headers]]
   for = "/*"
   [headers.values]
