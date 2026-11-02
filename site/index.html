@@ -16,7 +16,13 @@
   </head>
   <body>
     <div id="app" class="app-shell">
-      <div class="boot-screen"><span class="brand-mark">W</span><p>Preparing your workspace…</p></div>
+      <div class="boot-screen" role="status" aria-live="polite">
+        <div class="loader-emblem"><span class="loader-mark">W</span><span class="loader-orbit loader-orbit-one"></span><span class="loader-orbit loader-orbit-two"></span></div>
+        <div class="loader-wordmark">WHO'S <span>next</span></div>
+        <p>Preparing your workspace</p>
+        <div class="loader-progress" aria-hidden="true"><span></span></div>
+        <small>Securely connecting your team</small>
+      </div>
     </div>
     <dialog id="action-dialog" class="dialog">
       <form method="dialog" class="dialog-dismiss"><button class="icon-button" aria-label="Close">×</button></form>
