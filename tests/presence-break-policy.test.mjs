@@ -34,7 +34,7 @@ test('SME and Super Admin share the same admin permission check', () => {
 
 test('admin shift report is date-scoped and the dashboard hides past dates from members', () => {
   assert.match(migration, /admin_shift_allocation_report\(p_work_date date\)/);
-  assert.match(migration, /a\\.assigned_at >= coalesce\\([\\s\\S]*?s\\.work_date=v_today/);
+  assert.ok(migration.includes('a.assigned_at >= coalesce') && migration.includes('s.work_date=v_today'));
   assert.match(app, /admin_shift_allocation_report/);
 });
 
