@@ -320,7 +320,7 @@ function renderApp() {
   const members = domainMembers();
   const statuses = members.map((member) => ({ member, status: getMemberStatus(member, contextNow()), presence: (state.presence || []).find((item) => item.memberId === member.id)?.status || 'offline' }));
   const counts = {
-    available: statuses.filter((x) => x.status.code === 'available').length,
+    available: statuses.filter((x) => x.presence === 'active' && x.status.code === 'available').length,
     break: statuses.filter((x) => x.status.tone === 'warning').length,
     unavailable: statuses.filter((x) => x.status.tone === 'danger').length,
     pending: state.requests.filter((r) => r.status === 'pending').length,
@@ -499,6 +499,11 @@ async function signOut() {
   const button = $('#sign-out');
   if (button) button.disabled = true;
   try {
+    const latestAttendance = latestAttendanceForCurrentMember();
+    if (latestAttendance?.eventType === 'check_in') {
+      const { error: checkoutError } = await supabase.rpc('record_attendance', { p_event_type: 'check_out' });
+      if (checkoutError) throw checkoutError;
+    }
     const { error: offlineError } = await supabase.rpc('set_member_offline');
     if (offlineError) throw offlineError;
     const { error: handoverError } = await supabase.rpc('ensure_shift_assignee');
@@ -556,7 +561,7 @@ function renderOverview(me, assignee, counts, statuses) {
       </section>
     </div>
     <section class="panel team-panel" style="margin-bottom:16px"><div class="panel-head"><div><div class="panel-title">Team availability</div><div class="panel-subtitle">Eligibility is recalculated from the current shift and approved time windows</div></div><span class="panel-subtitle">${counts.available} available / ${statuses.length} total</span></div>
-      <div class="table-wrap"><table class="team-table"><thead><tr><th>Team member</th><th>Presence</th><th>Shift</th><th>Status</th><th>Reason</th><th>Expected return</th></tr></thead><tbody>${statuses.map(({ member, status }) => `<tr><td><div class="employee-cell"><span class="avatar">${initials(member.name)}</span><div><strong>${escapeHtml(member.name)}</strong><small>${member.id === currentMemberId ? 'You' : 'Team member'}</small></div></div></td><td><span class="presence-pill presence-${presence}">${presence === 'active' ? 'Active' : presence === 'away' ? 'Away' : 'Offline'}</span></td><td>${member.shift ? `${member.shift.start} – ${member.shift.end}` : '—'}</td><td>${statusPill(status)}</td><td>${escapeHtml(status.reason)}</td><td class="return-time">${returnLabel(status)}</td></tr>`).join('')}</tbody></table></div>
+      <div class="table-wrap"><table class="team-table"><thead><tr><th>Team member</th><th>Presence</th><th>Shift</th><th>Status</th><th>Reason</th><th>Expected return</th></tr></thead><tbody>${statuses.map(({ member, status, presence }) => `<tr><td><div class="employee-cell"><span class="avatar">${initials(member.name)}</span><div><strong>${escapeHtml(member.name)}</strong><small>${member.id === currentMemberId ? 'You' : 'Team member'}</small></div></div></td><td><span class="presence-pill presence-${presence}">${presence === 'active' ? 'Active' : presence === 'away' ? 'Away' : 'Offline'}</span></td><td>${member.shift ? `${member.shift.start} – ${member.shift.end}` : '—'}</td><td>${statusPill(status)}</td><td>${escapeHtml(status.reason)}</td><td class="return-time">${returnLabel(status)}</td></tr>`).join('')}</tbody></table></div>
     </section>
     <div class="bottom-grid"><section class="panel"><div class="panel-head"><div><div class="panel-title">Requests to review</div><div class="panel-subtitle">Pending requests transfer with the assignee handover</div></div><button class="text-link" data-go="requests">View all →</button></div><div class="request-list">${pending.length ? pending.map(renderRequestCard).join('') : '<div class="empty-state">No pending requests. Your approval queue is clear.</div>'}</div></section>
       <section class="panel"><div class="panel-head"><div><div class="panel-title">Recent allocation activity</div><div class="panel-subtitle">Latest assignments recorded</div></div><button class="text-link" data-go="reports">View reports →</button></div><div class="activity-list">${allocations.length ? allocations.map((item) => { const recipient = state.members.find((m) => m.id === item.memberId); const assigner = state.members.find((m) => m.id === item.assignedBy); return `<div class="activity-item"><span class="activity-icon">⇄</span><div class="activity-copy"><p><strong>${escapeHtml(recipient?.name || 'Unknown member')}</strong> received an allocation from ${escapeHtml(assigner?.name || 'Unknown assignee')} ${item.reference ? `· ${escapeHtml(item.reference)}` : ''}</p><small>${prettyDateTime(item.assignedAt)}</small></div></div>`; }).join('') : '<div class="empty-state">No allocations have been recorded yet.</div>'}</div></section></div>`;
@@ -668,7 +673,7 @@ async function rotateMemberCode(memberId) {
 }
 
 async function saveAdminRole(memberId) {
-  const select = document.querySelector(`#admin-role-${CSS.escape(memberId)}`);
+  const select = document.getElementById(`admin-role-${memberId}`);
   if (!select) return;
   const role = select.value;
   const member = adminRoster.find((item) => item.id === memberId);
