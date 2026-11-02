@@ -9,7 +9,7 @@ const bindingSource = appSource.match(/function bindViewActions\(\) \{([\s\S]*?)
 test('navigation buttons are selected as a collection before iteration', () => {
   assert.ok(bindingSource, 'bindViewActions must exist');
   assert.ok(appSource.includes("$$('.nav button').forEach"), 'Navigation must use the plural selector helper');
-  assert.ok(!appSource.includes("$('.nav button').forEach"), 'Navigation must not iterate a single querySelector result');
+  assert.doesNotMatch(appSource, /(?<!\\$)\\$\\('.nav button'\\)\\.forEach/, 'Navigation must not iterate a single querySelector result');
 });
 
 test('admin control collections use querySelectorAll before iteration', () => {
