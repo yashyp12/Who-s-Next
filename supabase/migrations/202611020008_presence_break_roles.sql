@@ -328,7 +328,7 @@ set search_path = public, pg_temp
 as $$
 declare
   v_workspace_id uuid; v_member_id uuid; v_break_id uuid; v_local_date date; v_timezone text;
-  v_break_start timestamptz; v_break_end timestamptz;
+  v_break_start timestamptz; v_break_end timestamptz; v_shift_start timestamptz; v_shift_end timestamptz; v_shift_date date;
 
 begin
   select workspace_id, member_id into v_workspace_id, v_member_id from public.member_sessions where auth_user_id = auth.uid();
@@ -339,11 +339,17 @@ begin
   if p_work_date < v_local_date - 1 or p_work_date > v_local_date + 90 then raise exception 'Break date must be within the next 90 days.'; end if;
   v_break_start := (p_work_date + p_start) at time zone v_timezone;
   v_break_end := ((p_work_date + p_end) + case when p_end <= p_start then interval '1 day' else interval '0' end) at time zone v_timezone;
-  if not exists (select 1 from public.shifts s where s.workspace_id = v_workspace_id and s.member_id = v_member_id and s.work_date between p_work_date - 1 and p_work_date
-      and v_break_start >= ((s.work_date + s.start_time) at time zone v_timezone)
-      and v_break_end <= (((s.work_date + s.end_time) + case when s.end_time <= s.start_time then interval '1 day' else interval '0' end) at time zone v_timezone)) then
-    raise exception 'The planned break must fit inside one of your scheduled shifts.';
-  end if;
+  select s.work_date,
+    (s.work_date + s.start_time) at time zone v_timezone,
+    ((s.work_date + s.end_time) + case when s.end_time <= s.start_time then interval '1 day' else interval '0' end) at time zone v_timezone
+  into v_shift_date,v_shift_start,v_shift_end
+  from public.shifts s
+  where s.workspace_id=v_workspace_id and s.member_id=v_member_id
+    and s.work_date between p_work_date - 1 and p_work_date
+    and v_break_start >= ((s.work_date + s.start_time) at time zone v_timezone)
+    and v_break_end <= (((s.work_date + s.end_time) + case when s.end_time <= s.start_time then interval '1 day' else interval '0' end) at time zone v_timezone)
+  order by s.work_date desc limit 1;
+  if v_shift_date is null then raise exception 'The planned break must fit inside one of your scheduled shifts.'; end if;
 
   if v_break_end <= v_break_start then raise exception 'Break end must be after break start.'; end if;
   if extract(epoch from (v_break_end - v_break_start)) / 60 > 60 then
@@ -364,9 +370,15 @@ begin
         ((b.work_date + b.end_time) + case when b.end_time <= b.start_time then interval '1 day' else interval '0' end)
         - (b.work_date + b.start_time)
       )) / 60)
-      from public.breaks b
-      where b.workspace_id = v_workspace_id and b.member_id = v_member_id
-        and b.work_date = p_work_date
+      from (
+        select
+          (b.work_date + b.start_time) at time zone v_timezone as existing_start,
+          ((b.work_date + b.end_time) + case when b.end_time <= b.start_time then interval '1 day' else interval '0' end) at time zone v_timezone as existing_end
+        from public.breaks b
+        where b.workspace_id=v_workspace_id and b.member_id=v_member_id
+          and b.work_date between v_shift_date and v_shift_date + case when v_shift_end::date > v_shift_start::date then 1 else 0 end
+      ) existing_breaks
+      where existing_start >= v_shift_start and existing_end <= v_shift_end
     ), 0)
     + extract(epoch from (v_break_end - v_break_start)) / 60
   ) > 60 and not exists (
