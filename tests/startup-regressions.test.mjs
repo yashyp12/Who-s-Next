@@ -110,16 +110,17 @@ test('workspace clock always renders a fallback and safely handles invalid works
   const clock = app.slice(app.indexOf('function startWorkspaceClock()'), app.indexOf('function addCalendarDays'));
   assert.match(clock, /clock\.textContent = formatWorkspaceClock\(now\)/);
   assert.match(clock, /timeZone: workspaceTimezone[\s\S]*?\} catch \(error\)/);
-  assert.match(app, /function formatWorkspaceClock\(now = new Date\(\)\)/);\n  assert.match(app, /aria-label="Workspace time">\$\{escapeHtml\(formatWorkspaceClock\(\)\)\}/);
+  assert.match(app, /function formatWorkspaceClock\(now = new Date\(\)\)/);
+  assert.match(app, /aria-label="Workspace time">\$\{escapeHtml\(formatWorkspaceClock\(\)\)\}/);
 });
 
 test('logout verifies the atomic handover result and never silently signs out on an old database function', () => {
   const signOut = app.slice(app.indexOf('async function signOut()'), app.indexOf('function latestAttendanceForCurrentMember()'));
-  assert.match(signOut, /supabase\\.rpc\\('set_member_offline'\\)/);
-  assert.doesNotMatch(signOut, /supabase\\.rpc\\('ensure_shift_assignee'/);
-  assert.match(signOut, /offlineResult\\?\\.handover/);
-  assert.match(signOut, /hasOwnProperty\\.call\\(handover, 'current_assignee_id'\\)/);
-  assert.match(signOut, /handover\\.current_assignee_id === currentMemberId/);
-  assert.match(signOut, /heartbeatPresence\\('active'\\)/);
-  assert.doesNotMatch(signOut, /if \\(checkoutError\\) throw checkoutError/);
+  assert.match(signOut, /supabase\.rpc\('set_member_offline'\)/);
+  assert.doesNotMatch(signOut, /supabase\.rpc\('ensure_shift_assignee'/);
+  assert.match(signOut, /offlineResult\?\.handover/);
+  assert.match(signOut, /hasOwnProperty\.call\(handover, 'current_assignee_id'\)/);
+  assert.match(signOut, /handover\.current_assignee_id === currentMemberId/);
+  assert.match(signOut, /heartbeatPresence\('active'\)/);
+  assert.doesNotMatch(signOut, /if \(checkoutError\) throw checkoutError/);
 });
