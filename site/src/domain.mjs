@@ -91,6 +91,16 @@ export function getEligibleMembers(members, context) {
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
 }
 
+export function getTicketEligibleMembers(members, context) {
+  return members
+    .map((member) => ({ member, status: getMemberStatus(member, context) }))
+    .filter(({ member, status }) => member.active !== false
+      && ['available', 'technical', 'rdp', 'meeting'].includes(status.code))
+    .map(({ member }) => member)
+    .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0)
+      || left.name.localeCompare(right.name));
+}
+
 export function buildRotation(members, lastAllocatedMemberId, context = null) {
   if (!members.length) return [];
   const orderedRoster = [...members].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
