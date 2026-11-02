@@ -961,9 +961,11 @@ async function takeOver() {
 }
 
 async function reviewRequest(requestId, decision) {
-  if (!isCurrentAssignee()) return toast('Only the current assignee can review requests.', true);
   const request = state.requests.find((item) => item.id === requestId);
   if (!request || request.status !== 'pending') return toast('This request has already been reviewed.', true);
+  if (!isCurrentAssignee() && !(request.type === 'extended_break' && currentIsAdmin)) {
+    return toast('Only the current assignee or an SME/Super Admin can review this break request.', true);
+  }
   const confirmation = window.prompt('Manager / SME / TL confirmation (optional):', '');
   if (confirmation === null) return;
   try {
