@@ -193,3 +193,34 @@ revoke execute on function public.record_next_allocation(text, text, boolean) fr
 grant execute on function public.record_next_allocation(text, text, boolean) to authenticated;
 revoke execute on function public.add_break(date, time, time, text, text) from public, anon;
 grant execute on function public.add_break(date, time, time, text, text) to authenticated;
+
+-- Keep persistent assignment notifications accurate for both allocation kinds.
+create or replace function public.notify_allocation_recipient()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_actor_name text;
+  v_is_existing_ticket boolean := new.allocation_kind = 'existing_ticket';
+begin
+  select name into v_actor_name from public.members
+  where id = new.assigned_by_member_id and workspace_id = new.workspace_id;
+
+  perform public.create_member_notification(
+    new.workspace_id,
+    new.recipient_member_id,
+    new.assigned_by_member_id,
+    'allocation_received',
+    case when v_is_existing_ticket then 'An existing ticket was assigned to you' else 'A new email was assigned to you' end,
+    coalesce(v_actor_name, 'A teammate')
+      || case when v_is_existing_ticket then ' routed an existing ticket to you' else ' assigned an email to you' end
+      || case when nullif(new.reference, '') is not null then ' · ' || new.reference else '' end
+      || case when nullif(new.email_subject, '') is not null then ' · ' || new.email_subject else '' end,
+    'allocation',
+    new.id
+  );
+  return new;
+end;
+$$;
