@@ -124,3 +124,32 @@ test('logout verifies the atomic handover result and never silently signs out on
   assert.match(signOut, /heartbeatPresence\('active'\)/);
   assert.doesNotMatch(signOut, /if \(checkoutError\) throw checkoutError/);
 });
+
+
+test('optional request and swap actions use collection selectors and cannot abort page initialization', () => {
+  assert.match(app, /\$\$\('\[data-edit-own-request\]'\)\.forEach/);
+  assert.match(app, /\$\$\('\[data-withdraw-request\]'\)\.forEach/);
+  assert.match(app, /\$\$\('\[data-swap-response\]'\)\.forEach/);
+  assert.doesNotMatch(app, /\$\('\[(?:data-edit-own-request|data-withdraw-request|data-swap-response)\]'\)\.forEach/);
+});
+
+test('admin roster loader remains reachable after optional profile controls are bound', () => {
+  const render = app.slice(app.indexOf('function renderApp()'), app.indexOf('function startWorkspaceClock()'));
+  assert.ok(render.indexOf('bindViewActions();') < render.indexOf('loadAdminRoster();'));
+  assert.match(app, /async function loadAdminRoster\(\)/);
+  assert.match(app, /supabase\.rpc\('admin_list_members'\)/);
+});
+
+test('withdrawal migration locks allocation state before the request row', async () => {
+  const migration = await readFile(new URL('../supabase/migrations/202611020012_fix_withdrawal_lock_order.sql', import.meta.url), 'utf8');
+  const stateLock = migration.indexOf('from public.allocation_state');
+  const requestLock = migration.indexOf('from public.availability_requests');
+  assert.ok(stateLock >= 0 && requestLock > stateLock);
+  assert.match(migration, /for update[\s\S]*?select \* into v_request/);
+  assert.match(migration, /perform public\.ensure_shift_assignee\(\)/);
+});
+
+test('responsive header moves to a reserved grid before clock and actions can overlap', () => {
+  assert.match(styles, /@media\(max-width:1100px\)\{\s*\.topbar\{display:grid;/);
+  assert.match(styles, /\.top-actions \.mobile-profile-toggle\{display:inline-flex/);
+});
