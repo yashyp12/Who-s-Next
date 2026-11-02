@@ -512,12 +512,7 @@ async function maybeAutoCheckIn() {
 function toggleSidebar() {
   sidebarCollapsed = !sidebarCollapsed;
   localStorage.setItem('whos-next-sidebar-collapsed', String(sidebarCollapsed));
-  $('.layout')?.classList.toggle('sidebar-collapsed', sidebarCollapsed);
-  const button = $('#sidebar-toggle');
-  if (button) {
-    button.setAttribute('aria-label', `${sidebarCollapsed ? 'Show' : 'Hide'} sidebar`);
-    button.title = `${sidebarCollapsed ? 'Show' : 'Hide'} sidebar`;
-  }
+  renderApp();
 }
 
 async function signOut() {
