@@ -73,3 +73,26 @@ test('request withdrawal migration restricts updates to the authenticated reques
   assert.match(migration, /presence_state = 'active'/);
   assert.match(migration, /last_seen_at > v_now - interval '90 seconds'/);
 });
+
+
+test('logout performs atomic server-side handover to the next eligible colleague in the same shift', async () => {
+  const migration = await readFile(new URL('../supabase/migrations/202611020011_atomic_logout_handover.sql', import.meta.url), 'utf8');
+  const offlineFunction = migration.slice(
+    migration.indexOf('create or replace function public.set_member_offline()'),
+    migration.indexOf('revoke execute on function public.ensure_shift_assignee()')
+  );
+  const reconciliation = migration.slice(
+    migration.indexOf('create or replace function public.ensure_shift_assignee()'),
+    migration.indexOf('-- Deleting presence and reconciling ownership')
+  );
+
+  assert.match(offlineFunction, /delete from public\.member_presence[\s\S]*?v_handover := public\.ensure_shift_assignee\(\)/);
+  assert.match(offlineFunction, /'handover', v_handover/);
+  assert.match(reconciliation, /for update/);
+  assert.match(reconciliation, /last_seen_at > v_now - interval '90 seconds'/);
+  assert.match(reconciliation, /r\.status = 'approved'[\s\S]*?r\.end_at > v_now/);
+  assert.match(reconciliation, /s\.shift_key = v_previous_shift_key/);
+  assert.match(reconciliation, /m\.sort_order > coalesce\(v_previous_sort_order/);
+  assert.match(reconciliation, /'automatic_handover'/);
+  assert.match(reconciliation, /'No eligible colleague is on shift; allocation responsibility is unassigned'/);
+});
