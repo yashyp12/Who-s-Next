@@ -190,3 +190,5 @@ export function formatDuration(minutes) {
 // Keep the status contract explicit for new-email and existing-ticket allocation.
 
 // Presence and allocation policy remains shared between the queue and server-backed flow.
+
+// Active break countdown uses the workspace-local end timestamp.
