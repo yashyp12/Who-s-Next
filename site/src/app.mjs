@@ -289,7 +289,7 @@ async function joinWorkspace(event) {
   const code = $('#join-code').value.trim();
   if (code.length < 16) return toast('Enter the individual access code shared with you.', true);
   const button = $('#join-form button[type="submit"]');
-  button.disabled = true; button.textContent = 'Opening workspace…';
+  button.disabled = true; button.setAttribute('aria-busy', 'true'); button.innerHTML = '<span class="button-spinner" aria-hidden="true"></span>Connecting securely…';
   try {
     const { data, error } = await supabase.rpc('join_workspace', { p_access_code: code });
     if (error) throw error;
@@ -303,7 +303,7 @@ async function joinWorkspace(event) {
     await reloadRemote();
   } catch (error) {
     toast(error.message || 'Unable to join workspace.', true);
-    button.disabled = false; button.innerHTML = 'Open workspace <span>→</span>';
+    button.disabled = false; button.removeAttribute('aria-busy'); button.innerHTML = 'Open workspace <span>→</span>';
   }
 }
 
