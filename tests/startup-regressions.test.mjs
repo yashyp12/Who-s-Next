@@ -42,10 +42,11 @@ test('workspace header centers the timer and orders top actions', () => {
  assert.ok(header.indexOf('class="notification-center"')<header.indexOf('class="live-pill"'));
  assert.match(styles,/position:absolute;left:50%;transform:translateX\(-50%\)/);
 });
-test('sidebar collapse and expand use smooth desktop and mobile transitions',()=>{
- assert.match(app,/id="sidebar-toggle" type="button" aria-expanded=/);
- assert.match(styles,/transition:grid-template-columns \.28s/);
- assert.match(styles,/max-height \.25s ease/);
+test('workspace sidebar stays open without collapse controls', () => {
+ assert.match(app, /const sidebarCollapsed = false/);
+ assert.doesNotMatch(app, /id="sidebar-toggle"/);
+ assert.doesNotMatch(app, /function toggleSidebar\(/);
+ assert.match(styles, /\.layout\.sidebar-collapsed > \.sidebar \{ display: flex !important; \}/);
 });
 
 
