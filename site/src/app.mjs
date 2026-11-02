@@ -790,3 +790,5 @@ boot();
 // The admin page is rendered only for members with a database-backed admin grant.
 
 // Admin CI target includes the shift-aware migration dependency.
+
+// Revalidate admin controls against the updated CI base.
