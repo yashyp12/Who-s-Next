@@ -6,6 +6,12 @@ const appSource = await readFile(new URL('../site/src/app.mjs', import.meta.url)
 const cssSource = await readFile(new URL('../site/src/styles.css', import.meta.url), 'utf8');
 const bindingSource = appSource.match(/function bindViewActions\(\) \{([\s\S]*?)\n\}/)?.[1];
 
+test('navigation buttons are selected as a collection before iteration', () => {
+  assert.ok(bindingSource, 'bindViewActions must exist');
+  assert.ok(appSource.includes("$$('.nav button').forEach"), 'Navigation must use the plural selector helper');
+  assert.doesNotMatch(appSource, /(?<!\$)\$\('.nav button'\)\.forEach/, 'Navigation must not iterate a single querySelector result');
+});
+
 test('admin control collections use querySelectorAll before iteration', () => {
   assert.ok(bindingSource, 'bindViewActions must exist');
   for (const selector of ['[data-admin-rotate]', '[data-admin-toggle]', '[data-admin-name]', '[data-admin-shift]']) {
