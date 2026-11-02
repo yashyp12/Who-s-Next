@@ -346,3 +346,21 @@
   .toolbar-actions #record-next{grid-column:auto}
   .utility-icon-button{width:34px;min-width:34px;height:36px}
 }
+
+
+/* Presence and equal-access admin roles */
+.presence-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 8px;border-radius:99px;font-size:9px;font-weight:800;letter-spacing:.2px;text-transform:capitalize;white-space:nowrap}
+.presence-pill:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.presence-active{color:#73d6a0;background:#73d6a014}
+.presence-away{color:#f0bd65;background:#f0bd6514}
+.presence-offline{color:#91a0b1;background:#91a0b114}
+.admin-role-select{min-width:116px;max-width:145px;padding:7px 9px;border:1px solid var(--line);border-radius:9px;background:#0e151d;color:var(--text);font-size:10px}
+.admin-report-panel{margin-top:16px}
+.admin-report-panel .toolbar-actions{display:flex;align-items:end;margin-bottom:12px}
+.admin-report-panel .field{min-width:180px}
+.admin-report-table{margin-top:12px}
+@media(max-width:720px){
+  .admin-role-select{width:100%;max-width:none;min-height:38px}
+  .admin-report-panel .toolbar-actions{display:grid;grid-template-columns:1fr}
+  .admin-report-panel .toolbar-actions .button{min-height:40px}
+}
