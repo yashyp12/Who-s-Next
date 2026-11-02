@@ -47,3 +47,29 @@ test('sidebar collapse and expand use smooth desktop and mobile transitions',()=
  assert.match(styles,/transition:grid-template-columns \.28s/);
  assert.match(styles,/max-height \.25s ease/);
 });
+
+
+test('My profile exposes edit and withdraw controls only for own availability requests', () => {
+  assert.match(app, /function renderOwnAvailabilityRequestCard\(request\)/);
+  assert.match(app, /data-edit-own-request=/);
+  assert.match(app, /data-withdraw-request=/);
+  assert.match(app, /request\.memberId === currentMemberId/);
+  assert.match(app, /update_my_availability_request/);
+  assert.match(app, /withdraw_my_availability_request/);
+});
+
+test('takeover verifies the persisted assignee after server reconciliation', () => {
+  assert.match(app, /await reloadRemote\(\);\s+if \(!isCurrentAssignee\(\)\) throw new Error/);
+  assert.match(app, /Withdraw any active approved unavailability request from My profile/);
+});
+
+test('request withdrawal migration restricts updates to the authenticated request owner', async () => {
+  const migration = await readFile(new URL('../supabase/migrations/202611020010_request_withdrawal_and_takeover_guard.sql', import.meta.url), 'utf8');
+  assert.match(migration, /status in \('pending','approved','rejected','cancelled'\)/);
+  assert.match(migration, /v_request\.member_id is distinct from v_member_id/);
+  assert.match(migration, /create or replace function public\.withdraw_my_availability_request/);
+  assert.match(migration, /create or replace function public\.update_my_availability_request/);
+  assert.match(migration, /create or replace function public\.take_over_allocation/);
+  assert.match(migration, /presence_state = 'active'/);
+  assert.match(migration, /last_seen_at > now\(\) - interval '90 seconds'/);
+});
