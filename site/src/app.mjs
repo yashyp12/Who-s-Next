@@ -20,6 +20,12 @@ let adminRoster = [];
 let adminRosterLoaded = false;
 let workspaceId = null;
 let realtimeChannel = null;
+let presenceChannel = null;
+let presenceTimer = null;
+let presenceRefreshTimer = null;
+let presenceState = 'active';
+let presenceBusy = false;
+let lastPresenceActivity = Date.now();
 let toastTimer = null;
 let clockTimer = null;
 let boundaryTimer = null;
@@ -111,7 +117,7 @@ function mapDashboard(payload) {
     members: payload.members || [], shifts: payload.shifts || [], breaks: payload.breaks || [],
     requests: payload.requests || [], allocations: (payload.allocations || []).map((item) => ({ ...item, emailSubject: item.emailSubject || null })), handovers: payload.handovers || [], shiftSwaps: payload.shiftSwaps || [],
     currentAssigneeId: payload.currentAssigneeId || null, lastAllocatedMemberId: payload.lastAllocatedMemberId || null,
-    activities: payload.activities || [], attendance: payload.attendance || [],
+    activities: payload.activities || [], attendance: payload.attendance || [], presence: [],
   };
   mapped.members = mapped.members.map((member) => {
     const todayParts = partsInTimezone(new Date(), mapped.timezone);
@@ -143,6 +149,8 @@ async function connectRemote() {
   if (error) throw error;
   if (me?.member_id) {
     currentMemberId = me.member_id; currentIsAdmin = Boolean(me.is_admin); workspaceId = me.workspace_id; setupRealtime();
+    await heartbeatPresence('active');
+    startPresenceTracking();
     await reloadRemote();
     return;
   }
@@ -153,6 +161,7 @@ function setupRealtime() {
   if (!supabase || !workspaceId || realtimeChannel) return;
   realtimeChannel = supabase.channel(`whos-next-${workspaceId}`, { config: { broadcast: { self: false } } })
     .on('broadcast', { event: 'refresh' }, () => { reloadRemote().catch((error) => toast(error.message || 'Live refresh failed.', true)); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'member_presence', filter: `workspace_id=eq.${workspaceId}` }, () => { refreshPresence().catch((error) => console.warn('Presence sync failed:', error)); })
     .subscribe();
 }
 
@@ -165,6 +174,9 @@ async function reloadRemote() {
     const { data, error } = await supabase.rpc('get_dashboard');
     if (error) throw error;
     state = mapDashboard(data || {});
+    const { data: presence, error: presenceError } = await supabase.rpc('get_workspace_presence');
+    if (presenceError) throw presenceError;
+    state.presence = Array.isArray(presence) ? presence : [];
     await maybeAutoCheckIn();
     renderApp();
   } finally { refreshInProgress = false; }
@@ -200,6 +212,8 @@ async function joinWorkspace(event) {
     if (memberError) throw memberError;
     currentIsAdmin = Boolean(me?.is_admin);
     setupRealtime();
+    await heartbeatPresence('active');
+    startPresenceTracking();
     await reloadRemote();
   } catch (error) {
     toast(error.message || 'Unable to join workspace.', true);
@@ -223,10 +237,11 @@ function domainMembers() {
 function currentMember() { return state?.members.find((member) => member.id === currentMemberId) || null; }
 function currentAssignee() { return state?.members.find((member) => member.id === state.currentAssigneeId) || null; }
 function contextNow() { return { now: new Date().toISOString(), date: localDate(), time: localTime() }; }
-function eligibleMembers() { return getEligibleMembers(domainMembers(), contextNow()); }
+function isPresenceActive(memberId) { return (state?.presence || []).find((item) => item.memberId === memberId)?.status === 'active'; }
+function eligibleMembers() { return getEligibleMembers(domainMembers(), contextNow()).filter((member) => isPresenceActive(member.id)); }
 function queueMembers(existingTicket = false) {
-  if (!existingTicket) return buildRotation(domainMembers(), state.lastAllocatedMemberId, contextNow());
-  const roster = [...domainMembers()].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
+  if (!existingTicket) return buildRotation(domainMembers().filter((member) => isPresenceActive(member.id)), state.lastAllocatedMemberId, contextNow());
+  const roster = [...domainMembers().filter((member) => isPresenceActive(member.id))].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
   const eligibleIds = new Set(getTicketEligibleMembers(roster, contextNow()).map((member) => member.id));
   const lastIndex = roster.findIndex((member) => member.id === state.lastAllocatedMemberId);
   const rotated = lastIndex < 0 ? roster : [...roster.slice(lastIndex + 1), ...roster.slice(0, lastIndex + 1)];
@@ -242,7 +257,7 @@ function renderApp() {
   const me = currentMember();
   if (!me) return showJoinScreen('Your selected profile is no longer available. Rejoin with the team code.');
   const members = domainMembers();
-  const statuses = members.map((member) => ({ member, status: getMemberStatus(member, contextNow()) }));
+  const statuses = members.map((member) => ({ member, status: getMemberStatus(member, contextNow()), presence: (state.presence || []).find((item) => item.memberId === member.id)?.status || 'offline' }));
   const counts = {
     available: statuses.filter((x) => x.status.code === 'available').length,
     break: statuses.filter((x) => x.status.tone === 'warning').length,
@@ -278,6 +293,7 @@ function renderApp() {
   $('#new-request-top')?.addEventListener('click', openRequestDialog);
   $('#sidebar-toggle')?.addEventListener('click', toggleSidebar);
   $('#sign-out')?.addEventListener('click', signOut);
+  $('[data-admin-role-save]').forEach((button) => button.addEventListener('click', () => saveAdminRole(button.dataset.adminRoleSave)));
   $('#refresh-workspace')?.addEventListener('click', async () => { try { if (remoteMode) await reloadRemote(); else renderApp(); toast('Workspace refreshed.'); } catch (error) { toast(error.message || 'Refresh failed.', true); } });
   $('#demo-profile')?.addEventListener('change', (event) => { currentMemberId = event.target.value; localStorage.setItem(PROFILE_KEY, currentMemberId); renderApp(); });
   bindViewActions();
@@ -416,9 +432,17 @@ function toggleSidebar() {
 
 async function signOut() {
   if (!remoteMode || !supabase) return;
+  const alternatives = queueMembers().filter((member) => member.id !== currentMemberId);
+  if (!alternatives.length && !window.confirm('You are the only active eligible colleague in the queue. Kindly wait for the next shift person to log in to avoid an SLA breach. Do you still want to sign out?')) return;
+  if (!window.confirm('Are you sure you want to sign out? Your presence will be set Offline and allocation responsibility will be handed over if another eligible colleague is online.')) return;
   const button = $('#sign-out');
   if (button) button.disabled = true;
   try {
+    const { error: offlineError } = await supabase.rpc('set_member_offline');
+    if (offlineError) throw offlineError;
+    const { error: handoverError } = await supabase.rpc('ensure_shift_assignee');
+    if (handoverError) throw handoverError;
+    stopPresenceTracking();
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     window.location.reload();
@@ -471,7 +495,7 @@ function renderOverview(me, assignee, counts, statuses) {
       </section>
     </div>
     <section class="panel team-panel" style="margin-bottom:16px"><div class="panel-head"><div><div class="panel-title">Team availability</div><div class="panel-subtitle">Eligibility is recalculated from the current shift and approved time windows</div></div><span class="panel-subtitle">${counts.available} available / ${statuses.length} total</span></div>
-      <div class="table-wrap"><table class="team-table"><thead><tr><th>Team member</th><th>Shift</th><th>Status</th><th>Reason</th><th>Expected return</th></tr></thead><tbody>${statuses.map(({ member, status }) => `<tr><td><div class="employee-cell"><span class="avatar">${initials(member.name)}</span><div><strong>${escapeHtml(member.name)}</strong><small>${member.id === currentMemberId ? 'You' : 'Team member'}</small></div></div></td><td>${member.shift ? `${member.shift.start} – ${member.shift.end}` : '—'}</td><td>${statusPill(status)}</td><td>${escapeHtml(status.reason)}</td><td class="return-time">${returnLabel(status)}</td></tr>`).join('')}</tbody></table></div>
+      <div class="table-wrap"><table class="team-table"><thead><tr><th>Team member</th><th>Presence</th><th>Shift</th><th>Status</th><th>Reason</th><th>Expected return</th></tr></thead><tbody>${statuses.map(({ member, status }) => `<tr><td><div class="employee-cell"><span class="avatar">${initials(member.name)}</span><div><strong>${escapeHtml(member.name)}</strong><small>${member.id === currentMemberId ? 'You' : 'Team member'}</small></div></div></td><td><span class="presence-pill presence-${presence}">${presence === 'active' ? 'Active' : presence === 'away' ? 'Away' : 'Offline'}</span></td><td>${member.shift ? `${member.shift.start} – ${member.shift.end}` : '—'}</td><td>${statusPill(status)}</td><td>${escapeHtml(status.reason)}</td><td class="return-time">${returnLabel(status)}</td></tr>`).join('')}</tbody></table></div>
     </section>
     <div class="bottom-grid"><section class="panel"><div class="panel-head"><div><div class="panel-title">Requests to review</div><div class="panel-subtitle">Pending requests transfer with the assignee handover</div></div><button class="text-link" data-go="requests">View all →</button></div><div class="request-list">${pending.length ? pending.map(renderRequestCard).join('') : '<div class="empty-state">No pending requests. Your approval queue is clear.</div>'}</div></section>
       <section class="panel"><div class="panel-head"><div><div class="panel-title">Recent allocation activity</div><div class="panel-subtitle">Latest assignments recorded</div></div><button class="text-link" data-go="reports">View reports →</button></div><div class="activity-list">${allocations.length ? allocations.map((item) => { const recipient = state.members.find((m) => m.id === item.memberId); const assigner = state.members.find((m) => m.id === item.assignedBy); return `<div class="activity-item"><span class="activity-icon">⇄</span><div class="activity-copy"><p><strong>${escapeHtml(recipient?.name || 'Unknown member')}</strong> received an allocation from ${escapeHtml(assigner?.name || 'Unknown assignee')} ${item.reference ? `· ${escapeHtml(item.reference)}` : ''}</p><small>${prettyDateTime(item.assignedAt)}</small></div></div>`; }).join('') : '<div class="empty-state">No allocations have been recorded yet.</div>'}</div></section></div>`;
