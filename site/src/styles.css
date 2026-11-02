@@ -133,3 +133,111 @@
 .notification-toast strong{font-size:12px}
 .notification-toast div{font-size:11px;color:#c4ced9}
 @media(max-width:720px){.notification-center{position:static}.notification-popover{position:fixed;top:132px;left:12px;right:12px;width:auto;max-height:calc(100dvh - 150px)}.notification-trigger{font-size:10px;padding:7px 8px}.top-actions{position:relative}}
+
+
+/* Mobile-first workspace redesign: compact navigation, readable cards, less repeated copy. */
+@media (max-width: 720px) {
+  body { background: var(--bg); }
+  .layout { display:block; min-height:100dvh; }
+  .sidebar {
+    position:fixed; inset:auto 0 0; z-index:50;
+    display:block; width:100%; padding:7px 8px max(7px, env(safe-area-inset-bottom));
+    background:#101720f5; border:0; border-top:1px solid #344252;
+    box-shadow:0 -12px 32px #0005; backdrop-filter:blur(18px);
+  }
+  .sidebar > div:first-child, .sidebar-bottom, .nav-label { display:none !important; }
+  .sidebar > div:nth-child(2) { width:100%; }
+  .nav {
+    display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:3px;
+    width:100%; max-width:none; overflow:visible; padding:0;
+  }
+  .nav button {
+    min-width:0; min-height:56px; padding:6px 2px;
+    display:flex; flex-direction:column; justify-content:center; align-items:center;
+    gap:4px; border:1px solid transparent; border-radius:12px;
+    color:#9eacbb; font-size:10px; line-height:1.1; white-space:normal;
+  }
+  .nav-icon { display:block !important; width:auto; font-size:18px; line-height:1; }
+  .nav button.active { color:var(--accent); background:#d1f36a12; border-color:#d1f36a22; }
+  .main { width:100%; min-width:0; padding:18px 14px calc(92px + env(safe-area-inset-bottom)); }
+  .topbar { display:flex; align-items:flex-start; flex-direction:column; gap:11px; margin:0 0 18px; }
+  .topbar > div:first-child { width:100%; }
+  .topbar .eyebrow { display:none; }
+  .page-title,.topbar .page-title { margin:0; font-size:clamp(25px,7vw,30px); line-height:1.12; letter-spacing:-1.1px; }
+  .top-actions { width:100%; display:flex; align-items:center; flex-wrap:nowrap; gap:7px; }
+  .top-actions .live-pill,.top-actions .demo-pill { display:none; }
+  .digital-clock { margin-right:auto; font-size:12px; }
+  .top-actions .button { min-height:38px; padding:8px 10px; font-size:10px; }
+  .greeting-row { display:block; margin-bottom:14px; }
+  .greeting-row h2 { font-size:19px !important; }
+  .greeting-row p { display:none; }
+  .date-stamp { margin-top:8px; text-align:left; font-size:10px; }
+  .stats { grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; margin-bottom:12px; }
+  .stat-card { min-height:88px; padding:12px; border-radius:14px; }
+  .stat-head { font-size:9px; }
+  .stat-sub { display:none; }
+  .stat-value { margin:9px 0 0; font-size:25px; }
+  .middle-grid,.bottom-grid { grid-template-columns:minmax(0,1fr); gap:11px; }
+  .panel { min-width:0; padding:14px; border-radius:15px; }
+  .panel-head { align-items:center; gap:6px; margin-bottom:10px; }
+  .panel-subtitle { display:none !important; }
+  .panel-title { font-size:13px; }
+  .page-toolbar { align-items:stretch; flex-direction:column; gap:10px; margin-bottom:13px; }
+  .page-toolbar > div:first-child { min-width:0; }
+  .page-toolbar .panel-subtitle { display:none !important; }
+  .toolbar-actions { width:100%; display:grid; grid-template-columns:1fr 1.3fr; gap:8px; }
+  .toolbar-actions .button { min-height:44px; }
+  .notice { padding:10px 12px; font-size:11px; line-height:1.45; }
+  .assignee-card { gap:10px; padding:12px; border-radius:13px; }
+  .assignee-meta strong { font-size:14px; }
+  .assignee-meta small { font-size:10px; }
+  .queue-list { gap:6px; }
+  .queue-item { gap:9px; padding:9px; border-radius:11px; }
+  .queue-number { width:24px; height:24px; font-size:10px; }
+  .queue-person strong { font-size:12px; }
+  .queue-person small { display:none; }
+  .queue-tag { font-size:9px; }
+  .schedule-list { gap:7px; }
+  .schedule-row { grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:7px 10px; padding:11px; border-radius:12px; font-size:11px; }
+  .schedule-row > div { min-width:0; overflow-wrap:anywhere; }
+  .allocation-row { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
+  .allocation-row > div:first-child { grid-column:1/-1; }
+  .allocation-row > div:first-child strong { font-size:13px; }
+  .allocation-row > div:nth-child(2), .allocation-row > div:nth-child(3) { color:var(--muted); font-size:10px; }
+  .allocation-subject { font-size:10px !important; }
+  .team-table { min-width:590px; }
+  .team-table th,.team-table td { padding:10px; }
+  .report-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+  .report-card { min-width:0; padding:12px; border-radius:12px; }
+  .report-card strong { font-size:20px; }
+  .request-card { padding:10px; gap:9px; }
+  .request-content strong { font-size:12px; line-height:1.35; }
+  .request-content p { font-size:11px; }
+  .request-time { font-size:10px; line-height:1.4; }
+  .request-actions { display:grid; grid-template-columns:1fr 1fr; }
+  .request-actions .button { min-height:38px; font-size:10px; }
+  .muted-copy { font-size:10px; line-height:1.45; }
+  .attendance-control { align-items:flex-start; }
+  .dialog { width:calc(100vw - 20px); max-width:none; max-height:calc(100dvh - 20px); border-radius:17px; }
+  .dialog-body { padding:4px 16px 18px; }
+  .dialog-body h2 { font-size:19px; }
+  .dialog-body>p { font-size:12px; line-height:1.45; }
+  .dialog-footer { display:grid; grid-template-columns:1fr 1fr; }
+  .notification-popover { top:auto; bottom:calc(68px + env(safe-area-inset-bottom)); left:10px; right:10px; width:auto; max-height:min(65dvh,520px); }
+  .toast { left:12px; right:12px; bottom:calc(76px + env(safe-area-inset-bottom)); }
+}
+@media (max-width: 390px) {
+  .main { padding-left:11px; padding-right:11px; }
+  .top-actions { gap:5px; }
+  .top-actions .button { padding:8px; }
+  .digital-clock { font-size:11px; padding:7px; }
+  .nav button { font-size:9px; }
+  .stat-card { padding:10px; }
+  .stat-head { font-size:8px; }
+  .stat-value { font-size:23px; }
+  .panel { padding:12px; }
+  .toolbar-actions { grid-template-columns:1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav button,.button { transition:none !important; }
+}
