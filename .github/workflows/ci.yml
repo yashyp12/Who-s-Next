@@ -23,5 +23,6 @@ jobs:
         run: |
           node --check site/src/app.mjs
           node --check site/src/domain.mjs
+          node --check scripts/generate-config.mjs
       - name: Run domain tests
         run: node --test
