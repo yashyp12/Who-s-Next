@@ -519,7 +519,7 @@ async function signOut() {
   const alternatives = queueMembers().filter((member) => member.id !== currentMemberId);
   if (!alternatives.length && !window.confirm('You are the only active eligible colleague in the queue. Kindly wait for the next shift person to log in to avoid an SLA breach. Do you still want to sign out?')) return;
   if (!window.confirm('Are you sure you want to sign out? Your presence will be set Offline and allocation responsibility will be handed over if another eligible colleague is online.')) return;
-  const button = $('#sign-out');
+  const button = $('#profile-sign-out');
   if (button) button.disabled = true;
   try {
     const latestAttendance = latestAttendanceForCurrentMember();
