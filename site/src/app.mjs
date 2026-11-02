@@ -34,6 +34,7 @@ let refreshQueued = false;
 let realtimeRefreshTimer = null;
 let hourlyReconcileTimer = null;
 let sidebarCollapsed = localStorage.getItem('whos-next-sidebar-collapsed') === 'true';
+let profileMenuOpen = false;
 let autoCheckInInProgress = false;
 
 const partsInTimezone = (date, timeZone) => { const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(date); return Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value])); };
@@ -350,30 +351,32 @@ function renderApp() {
   $('#app').innerHTML = `
     <div class="layout ${sidebarCollapsed ? 'sidebar-collapsed' : ''}">
       <aside class="sidebar">
-        <div><div class="brand"><img class="brand-wordmark" src="/whos-next-logo.svg" alt="WHO'S next" /></div><div class="workspace-tag">${escapeHtml(state.workspaceName)}</div></div>
+        <div><div class="brand sidebar-brand-row"><button class="button button-secondary button-small utility-icon-button sidebar-toggle-button" id="sidebar-toggle" type="button" aria-label="${sidebarCollapsed ? 'Show' : 'Hide'} sidebar" title="${sidebarCollapsed ? 'Show' : 'Hide'} sidebar">☰</button><img class="brand-wordmark" src="/whos-next-logo.svg" alt="WHO'S next" /></div><div class="workspace-tag">${escapeHtml(state.workspaceName)}</div></div>
         <div><div class="nav-label">Workspace</div><nav class="nav" aria-label="Main navigation">
           ${navButton('allocation','⇄','Allocate')}${navButton('overview','⌂','Team overview')}${navButton('schedule','▦','My profile')}${navButton('requests','↗','Requests',counts.pending)}${navButton('reports','▤','Reports')}${currentIsAdmin ? navButton('admin','⚙','Admin') : ''}
         </nav></div>
         <div class="sidebar-bottom">
           ${remoteMode ? '<div class="demo-note" style="border-color:#355944;background:#183327;color:#a6d9b5">Live team workspace<br/>Changes sync across browsers.</div>' : '<div class="demo-note">Preview mode<br/>Sample team data is stored only in this browser. Connect Supabase for shared live data.</div>'}
-          <div class="profile-mini"><span class="avatar">${initials(me.name)}</span><div style="min-width:0;flex:1"><strong>${escapeHtml(me.name)}</strong><small>Signed in as · ${isCurrentAssignee() ? 'Shift allocation owner' : 'Team member'}</small>${remoteMode ? '' : `<select id="demo-profile" aria-label="Preview as team member" style="margin-top:6px;max-width:155px;background:#111923;border:1px solid #334253;color:#9eafc2;border-radius:6px;padding:4px;font-size:9px">${state.members.map((m)=>`<option value="${m.id}" ${m.id===currentMemberId?'selected':''}>${escapeHtml(m.name)}</option>`).join('')}</select>`}</div></div>
+          <div class="profile-menu"><button class="profile-mini profile-menu-toggle" id="profile-menu-toggle" type="button" aria-expanded="${profileMenuOpen}"><span class="avatar">${initials(me.name)}</span><span class="profile-menu-copy"><strong>${escapeHtml(me.name)}</strong><small>${isCurrentAssignee() ? 'Shift allocation owner' : 'Team member'} · ${remoteMode ? 'Signed in' : 'Preview'}</small></span><span class="profile-menu-chevron">⌄</span></button>${profileMenuOpen ? `<div class="profile-menu-popover">${remoteMode ? '<button type="button" id="profile-sign-out">↪ Sign out</button>' : '<span>Preview session</span>'}</div>` : ''}${remoteMode ? '' : `<select id="demo-profile" aria-label="Preview as team member" style="margin-top:6px;max-width:155px;background:#111923;border:1px solid #334253;color:#9eafc2;border-radius:6px;padding:4px;font-size:9px">${state.members.map((m)=>`<option value="${m.id}" ${m.id===currentMemberId?'selected':''}>${escapeHtml(m.name)}</option>`).join('')}</select>`}</div>
         </div>
       </aside>
       <main class="main">
-        <header class="topbar"><div><div class="eyebrow">${activeView === 'overview' ? 'Live operations' : 'Team workspace'}</div><h1 class="page-title">${viewTitle(activeView)}</h1></div><div class="top-actions"><button class="button button-secondary button-small utility-icon-button" id="sidebar-toggle" type="button" aria-label="${sidebarCollapsed ? 'Show' : 'Hide'} sidebar" title="${sidebarCollapsed ? 'Show' : 'Hide'} sidebar">☰</button>${remoteMode ? '<button class="button button-secondary button-small utility-icon-button" id="sign-out" type="button" aria-label="Sign out" title="Sign out">↪</button>' : ''}<span id="workspace-clock" class="digital-clock" aria-label="Workspace time">--:--:--</span>${remoteMode ? '<span class="live-pill"><i class="live-dot"></i> Live sync</span>' : '<span class="demo-pill">● Local preview</span>'}<button class="button button-secondary button-small" id="refresh-workspace">↻ Refresh</button><button class="button button-secondary button-small" id="new-request-top">＋ New request</button></div></header>
+        <header class="topbar"><div><div class="eyebrow">${activeView === 'overview' ? 'Live operations' : 'Team workspace'}</div><h1 class="page-title">${viewTitle(activeView)}</h1></div><div class="top-actions"><span id="workspace-clock" class="digital-clock" aria-label="Workspace time">--:--:--</span>${remoteMode ? '<span class="live-pill"><i class="live-dot"></i> Live sync</span>' : '<span class="demo-pill">● Local preview</span>'}<button class="button button-secondary button-small" id="refresh-workspace">↻ Refresh</button><button class="button button-secondary button-small" id="new-request-top">＋ New request</button></div></header>
         <section class="section-view ${activeView === 'overview' ? 'active' : ''}" id="view-overview">${renderOverview(me, assignee, counts, statuses)}</section>
         <section class="section-view ${activeView === 'schedule' ? 'active' : ''}" id="view-schedule">${renderSchedule(me)}</section>
         <section class="section-view ${activeView === 'requests' ? 'active' : ''}" id="view-requests">${renderRequests(me)}</section>
         <section class="section-view ${activeView === 'allocation' ? 'active' : ''}" id="view-allocation">${renderAllocation(me, assignee)}</section>
         <section class="section-view ${activeView === 'reports' ? 'active' : ''}" id="view-reports">${renderReports()}</section>
         ${currentIsAdmin ? `<section class="section-view ${activeView === 'admin' ? 'active' : ''}" id="view-admin">${renderAdmin()}</section>` : ''}
+        <footer class="app-footer">WHO'S next · All rights reserved 2026 · Beta · v1.0</footer>
       </main>
     </div>`;
   if (remoteMode) initializeNotificationCenter({ supabase, memberId: currentMemberId });
   $$('.nav button').forEach((button) => button.addEventListener('click', () => { activeView = button.dataset.view; renderApp(); }));
   $('#new-request-top')?.addEventListener('click', openRequestDialog);
   $('#sidebar-toggle')?.addEventListener('click', toggleSidebar);
-  $('#sign-out')?.addEventListener('click', signOut);
+  $('#profile-menu-toggle')?.addEventListener('click', () => { profileMenuOpen = !profileMenuOpen; renderApp(); });
+  $('#profile-sign-out')?.addEventListener('click', signOut);
   $('[data-admin-role-save]').forEach((button) => button.addEventListener('click', () => saveAdminRole(button.dataset.adminRoleSave)));
   $('#refresh-workspace')?.addEventListener('click', async () => { try { if (remoteMode) await reloadRemote(); else renderApp(); toast('Workspace refreshed.'); } catch (error) { toast(error.message || 'Refresh failed.', true); } });
   $('#demo-profile')?.addEventListener('change', (event) => { currentMemberId = event.target.value; localStorage.setItem(PROFILE_KEY, currentMemberId); renderApp(); });
