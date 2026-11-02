@@ -8,7 +8,7 @@ export const SHIFT_PRESETS = {
 export const REQUEST_TYPES = {
   meeting: 'Meeting',
   kt: 'Knowledge transfer',
-  technical: 'Technical issue',
+  technical: 'Troubleshooting',
   rdp: 'RDP issue',
   extended_break: 'Extended break',
   late_login: 'Late login',
@@ -63,7 +63,7 @@ export function getMemberStatus(member, context) {
   const unavailable = (member.requests || []).find((r) => r.status === 'approved' && r.type !== 'leave' && isWithinDateTimeRange(now, r.startAt, r.endAt));
   if (unavailable) {
     const severe = ['technical', 'rdp'].includes(unavailable.type);
-    return { code: unavailable.type, label: REQUEST_TYPES[unavailable.type] || 'Unavailable', tone: severe ? 'danger' : 'warning', returnAt: unavailable.endAt, reason: unavailable.reason || REQUEST_TYPES[unavailable.type] };
+    return { code: unavailable.type, label: ['technical','rdp','meeting'].includes(unavailable.type) ? 'Troubleshooting / Meeting' : (REQUEST_TYPES[unavailable.type] || 'Unavailable'), tone: severe ? 'danger' : 'warning', returnAt: unavailable.endAt, reason: unavailable.reason || REQUEST_TYPES[unavailable.type] };
   }
 
   const activeBreak = (member.breaks || []).find((b) => {
