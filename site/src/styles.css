@@ -346,3 +346,54 @@
   .toolbar-actions #record-next{grid-column:auto}
   .utility-icon-button{width:34px;min-width:34px;height:36px}
 }
+
+
+/* Presence and equal-access admin roles */
+.presence-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 8px;border-radius:99px;font-size:9px;font-weight:800;letter-spacing:.2px;text-transform:capitalize;white-space:nowrap}
+.presence-pill:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.presence-active{color:#73d6a0;background:#73d6a014}
+.presence-away{color:#f0bd65;background:#f0bd6514}
+.presence-offline{color:#91a0b1;background:#91a0b114}
+.admin-role-select{min-width:116px;max-width:145px;padding:7px 9px;border:1px solid var(--line);border-radius:9px;background:#0e151d;color:var(--text);font-size:10px}
+.admin-report-panel{margin-top:16px}
+.admin-report-panel .toolbar-actions{display:flex;align-items:end;margin-bottom:12px}
+.admin-report-panel .field{min-width:180px}
+.admin-report-table{margin-top:12px}
+@media(max-width:720px){
+  .admin-role-select{width:100%;max-width:none;min-height:38px}
+  .admin-report-panel .toolbar-actions{display:grid;grid-template-columns:1fr}
+  .admin-report-panel .toolbar-actions .button{min-height:40px}
+}
+
+
+/* Compact account controls, left-anchored navigation toggle and product footer */
+.sidebar-brand-row{gap:8px;padding:0 4px}
+.sidebar-brand-row .brand-wordmark{flex:1;min-width:0}
+.sidebar-toggle-button{flex:0 0 36px;width:36px;min-width:36px;height:36px}
+.topbar-title-wrap{display:flex;align-items:center;gap:12px;min-width:0}
+.topbar-title-wrap>div{min-width:0}
+.profile-menu{position:relative;display:grid;gap:8px}
+.profile-menu-toggle{width:100%;border:0;background:transparent;color:var(--text);text-align:left;cursor:pointer}
+.profile-menu-copy{display:block;min-width:0;flex:1}
+.profile-menu-chevron{color:var(--muted);font-size:14px}
+.profile-menu-popover{position:absolute;left:0;bottom:calc(100% + 8px);z-index:70;min-width:180px;padding:6px;border:1px solid var(--line);border-radius:11px;background:#18222d;box-shadow:0 14px 38px #0008}
+.profile-menu-popover button{width:100%;padding:10px 11px;border:0;border-radius:8px;background:transparent;color:#ffc5c5;text-align:left;font-size:12px;font-weight:700}
+.profile-menu-popover button:hover{background:#ffffff0b}
+.profile-menu-popover span{display:block;padding:10px;color:var(--muted);font-size:11px}
+.app-footer{padding:20px 0 4px;margin-top:26px;border-top:1px solid var(--line);color:#78899b;font-size:10px;letter-spacing:.2px;text-align:center}
+@media(max-width:720px){
+  .sidebar-brand-row{gap:6px}
+  .sidebar-toggle-button{width:32px;min-width:32px;height:34px}
+  .topbar-title-wrap{gap:8px}
+  .profile-menu{display:none}
+}
+
+
+.mobile-profile-toggle{display:none;width:34px;height:34px;flex:0 0 34px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);color:var(--accent);font-size:11px;font-weight:800}
+.mobile-profile-popover{display:none}
+@media(max-width:720px){
+  .mobile-profile-toggle{display:grid;place-items:center}
+  .top-actions{position:relative}
+  .mobile-profile-popover{position:absolute;display:block;right:0;top:calc(100% + 8px);z-index:90;min-width:130px;padding:6px;border:1px solid var(--line);border-radius:10px;background:#18222d;box-shadow:0 14px 38px #0008}
+  .mobile-profile-popover button{width:100%;padding:9px 10px;border:0;border-radius:7px;background:transparent;color:#ffc5c5;text-align:left;font-size:11px;font-weight:700}
+}

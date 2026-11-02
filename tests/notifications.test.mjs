@@ -13,7 +13,7 @@ test('notification sound defaults on and remembers the member preference', () =>
 
 test('new notifications use realtime events and a polling fallback', () => {
   assert.match(source, /postgres_changes/);
-  assert.match(source, /window\.setInterval\([\s\S]*?8000\)/);
+  assert.match(source, /window\.setInterval\([\s\S]*?3000\)/);
   assert.match(source, /notifyNewItem\(\{/);
   assert.match(source, /seenNotificationIds\.has/);
 });

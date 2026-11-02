@@ -20,11 +20,21 @@ let adminRoster = [];
 let adminRosterLoaded = false;
 let workspaceId = null;
 let realtimeChannel = null;
+let presenceTimer = null;
+let presenceRefreshTimer = null;
+let presenceState = 'active';
+let presenceBusy = false;
+let lastPresenceActivity = Date.now();
+let lastActivityPersistedAt = 0;
 let toastTimer = null;
 let clockTimer = null;
 let boundaryTimer = null;
 let refreshInProgress = false;
+let refreshQueued = false;
+let realtimeRefreshTimer = null;
+let hourlyReconcileTimer = null;
 let sidebarCollapsed = localStorage.getItem('whos-next-sidebar-collapsed') === 'true';
+let profileMenuOpen = false;
 let autoCheckInInProgress = false;
 
 const partsInTimezone = (date, timeZone) => { const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(date); return Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value])); };
@@ -111,7 +121,7 @@ function mapDashboard(payload) {
     members: payload.members || [], shifts: payload.shifts || [], breaks: payload.breaks || [],
     requests: payload.requests || [], allocations: (payload.allocations || []).map((item) => ({ ...item, emailSubject: item.emailSubject || null })), handovers: payload.handovers || [], shiftSwaps: payload.shiftSwaps || [],
     currentAssigneeId: payload.currentAssigneeId || null, lastAllocatedMemberId: payload.lastAllocatedMemberId || null,
-    activities: payload.activities || [], attendance: payload.attendance || [],
+    activities: payload.activities || [], attendance: payload.attendance || [], presence: [],
   };
   mapped.members = mapped.members.map((member) => {
     const todayParts = partsInTimezone(new Date(), mapped.timezone);
@@ -143,6 +153,8 @@ async function connectRemote() {
   if (error) throw error;
   if (me?.member_id) {
     currentMemberId = me.member_id; currentIsAdmin = Boolean(me.is_admin); workspaceId = me.workspace_id; setupRealtime();
+    await heartbeatPresence('active');
+    startPresenceTracking();
     await reloadRemote();
     return;
   }
@@ -152,12 +164,89 @@ async function connectRemote() {
 function setupRealtime() {
   if (!supabase || !workspaceId || realtimeChannel) return;
   realtimeChannel = supabase.channel(`whos-next-${workspaceId}`, { config: { broadcast: { self: false } } })
-    .on('broadcast', { event: 'refresh' }, () => { reloadRemote().catch((error) => toast(error.message || 'Live refresh failed.', true)); })
+    .on('broadcast', { event: 'refresh' }, () => {
+      if (realtimeRefreshTimer) window.clearTimeout(realtimeRefreshTimer);
+      realtimeRefreshTimer = window.setTimeout(() => reloadRemote().catch((error) => toast(error.message || 'Live refresh failed.', true)), 120);
+    })
     .subscribe();
 }
 
+async function heartbeatPresence(nextState = presenceState) {
+  if (!remoteMode || !supabase || presenceBusy) return;
+  presenceBusy = true;
+  try {
+    const { error } = await supabase.rpc('heartbeat_member_presence', { p_state: nextState });
+    if (error) throw error;
+    presenceState = nextState;
+  } finally {
+    presenceBusy = false;
+  }
+}
+
+async function refreshPresence() {
+  if (!remoteMode || !supabase) return;
+  const { data, error } = await supabase.rpc('get_workspace_presence');
+  if (error) throw error;
+  const next = Array.isArray(data) ? data : [];
+  const current = state?.presence || [];
+  const changed = next.length !== current.length || next.some((item) => {
+    const previous = current.find((entry) => entry.memberId === item.memberId);
+    return !previous || previous.status !== item.status;
+  });
+  if (state) state.presence = next;
+  if (changed && state && currentMember()) renderApp();
+}
+
+function startPresenceTracking() {
+  if (!remoteMode || !supabase || presenceTimer) return;
+  const activityKey = `whos-next-last-activity-${currentMemberId}`;
+  const readLastActivity = () => {
+    try { lastPresenceActivity = Math.max(lastPresenceActivity, Number(localStorage.getItem(activityKey)) || 0); } catch { /* In-memory activity remains available. */ }
+  };
+  const markActivity = () => {
+    lastPresenceActivity = Date.now();
+    if (lastPresenceActivity - lastActivityPersistedAt >= 5000) {
+      try { localStorage.setItem(activityKey, String(lastPresenceActivity)); lastActivityPersistedAt = lastPresenceActivity; } catch { /* In-memory activity remains available. */ }
+    }
+    if (document.visibilityState === 'visible' && presenceState !== 'active') {
+      heartbeatPresence('active').then(refreshPresence).catch((error) => console.warn('Presence update failed:', error));
+    }
+  };
+  const syncPresence = () => {
+    readLastActivity();
+    const nextState = Date.now() - lastPresenceActivity >= 5 * 60 * 1000 ? 'away' : 'active';
+    if (nextState !== presenceState) {
+      heartbeatPresence(nextState).then(refreshPresence).catch((error) => console.warn('Presence update failed:', error));
+    } else {
+      heartbeatPresence(nextState).catch((error) => console.warn('Presence heartbeat failed:', error));
+    }
+  };
+  ['pointerdown','keydown','mousemove','touchstart'].forEach((eventName) => {
+    document.addEventListener(eventName, markActivity, { passive: true });
+  });
+  document.addEventListener('visibilitychange', syncPresence);
+  window.addEventListener('focus', markActivity);
+  window.addEventListener('storage', (event) => { if (event.key === activityKey) readLastActivity(); });
+  presenceTimer = window.setInterval(syncPresence, 20000);
+  presenceRefreshTimer = window.setInterval(() => {
+    refreshPresence().catch((error) => console.warn('Presence reconciliation failed:', error));
+  }, 20000);
+  hourlyReconcileTimer = window.setInterval(() => {
+    reloadRemote().catch((error) => console.warn('Hourly workspace reconciliation failed:', error));
+  }, 60 * 60 * 1000);
+}
+
+function stopPresenceTracking() {
+  if (presenceTimer) window.clearInterval(presenceTimer);
+  if (presenceRefreshTimer) window.clearInterval(presenceRefreshTimer);
+  if (hourlyReconcileTimer) window.clearInterval(hourlyReconcileTimer);
+  presenceTimer = null;
+  presenceRefreshTimer = null;
+  hourlyReconcileTimer = null;
+}
+
 async function reloadRemote() {
-  if (refreshInProgress) return;
+  if (refreshInProgress) { refreshQueued = true; return; }
   refreshInProgress = true;
   try {
     const { error: handoverError } = await supabase.rpc('ensure_shift_assignee');
@@ -165,9 +254,18 @@ async function reloadRemote() {
     const { data, error } = await supabase.rpc('get_dashboard');
     if (error) throw error;
     state = mapDashboard(data || {});
+    const { data: presence, error: presenceError } = await supabase.rpc('get_workspace_presence');
+    if (presenceError) throw presenceError;
+    state.presence = Array.isArray(presence) ? presence : [];
     await maybeAutoCheckIn();
     renderApp();
-  } finally { refreshInProgress = false; }
+  } finally {
+    refreshInProgress = false;
+    if (refreshQueued) {
+      refreshQueued = false;
+      window.setTimeout(() => reloadRemote().catch((error) => console.warn('Queued workspace reconciliation failed:', error)), 0);
+    }
+  }
 }
 
 function showJoinScreen(message = '') {
@@ -200,6 +298,8 @@ async function joinWorkspace(event) {
     if (memberError) throw memberError;
     currentIsAdmin = Boolean(me?.is_admin);
     setupRealtime();
+    await heartbeatPresence('active');
+    startPresenceTracking();
     await reloadRemote();
   } catch (error) {
     toast(error.message || 'Unable to join workspace.', true);
@@ -223,10 +323,11 @@ function domainMembers() {
 function currentMember() { return state?.members.find((member) => member.id === currentMemberId) || null; }
 function currentAssignee() { return state?.members.find((member) => member.id === state.currentAssigneeId) || null; }
 function contextNow() { return { now: new Date().toISOString(), date: localDate(), time: localTime() }; }
-function eligibleMembers() { return getEligibleMembers(domainMembers(), contextNow()); }
+function isPresenceActive(memberId) { return (state?.presence || []).find((item) => item.memberId === memberId)?.status === 'active'; }
+function eligibleMembers() { return getEligibleMembers(domainMembers(), contextNow()).filter((member) => isPresenceActive(member.id)); }
 function queueMembers(existingTicket = false) {
-  if (!existingTicket) return buildRotation(domainMembers(), state.lastAllocatedMemberId, contextNow());
-  const roster = [...domainMembers()].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
+  if (!existingTicket) return buildRotation(domainMembers().filter((member) => isPresenceActive(member.id)), state.lastAllocatedMemberId, contextNow());
+  const roster = [...domainMembers().filter((member) => isPresenceActive(member.id))].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
   const eligibleIds = new Set(getTicketEligibleMembers(roster, contextNow()).map((member) => member.id));
   const lastIndex = roster.findIndex((member) => member.id === state.lastAllocatedMemberId);
   const rotated = lastIndex < 0 ? roster : [...roster.slice(lastIndex + 1), ...roster.slice(0, lastIndex + 1)];
@@ -242,9 +343,9 @@ function renderApp() {
   const me = currentMember();
   if (!me) return showJoinScreen('Your selected profile is no longer available. Rejoin with the team code.');
   const members = domainMembers();
-  const statuses = members.map((member) => ({ member, status: getMemberStatus(member, contextNow()) }));
+  const statuses = members.map((member) => ({ member, status: getMemberStatus(member, contextNow()), presence: (state.presence || []).find((item) => item.memberId === member.id)?.status || 'offline' }));
   const counts = {
-    available: statuses.filter((x) => x.status.code === 'available').length,
+    available: statuses.filter((x) => x.presence === 'active' && x.status.code === 'available').length,
     break: statuses.filter((x) => x.status.tone === 'warning').length,
     unavailable: statuses.filter((x) => x.status.tone === 'danger').length,
     pending: state.requests.filter((r) => r.status === 'pending').length,
@@ -254,30 +355,35 @@ function renderApp() {
   $('#app').innerHTML = `
     <div class="layout ${sidebarCollapsed ? 'sidebar-collapsed' : ''}">
       <aside class="sidebar">
-        <div><div class="brand"><img class="brand-wordmark" src="/whos-next-logo.svg" alt="WHO'S next" /></div><div class="workspace-tag">${escapeHtml(state.workspaceName)}</div></div>
+        <div><div class="brand sidebar-brand-row"><button class="button button-secondary button-small utility-icon-button sidebar-toggle-button" id="sidebar-toggle" type="button" aria-label="${sidebarCollapsed ? 'Show' : 'Hide'} sidebar" title="${sidebarCollapsed ? 'Show' : 'Hide'} sidebar">☰</button><img class="brand-wordmark" src="/whos-next-logo.svg" alt="WHO'S next" /></div><div class="workspace-tag">${escapeHtml(state.workspaceName)}</div></div>
         <div><div class="nav-label">Workspace</div><nav class="nav" aria-label="Main navigation">
           ${navButton('allocation','⇄','Allocate')}${navButton('overview','⌂','Team overview')}${navButton('schedule','▦','My profile')}${navButton('requests','↗','Requests',counts.pending)}${navButton('reports','▤','Reports')}${currentIsAdmin ? navButton('admin','⚙','Admin') : ''}
         </nav></div>
         <div class="sidebar-bottom">
           ${remoteMode ? '<div class="demo-note" style="border-color:#355944;background:#183327;color:#a6d9b5">Live team workspace<br/>Changes sync across browsers.</div>' : '<div class="demo-note">Preview mode<br/>Sample team data is stored only in this browser. Connect Supabase for shared live data.</div>'}
-          <div class="profile-mini"><span class="avatar">${initials(me.name)}</span><div style="min-width:0;flex:1"><strong>${escapeHtml(me.name)}</strong><small>Signed in as · ${isCurrentAssignee() ? 'Shift allocation owner' : 'Team member'}</small>${remoteMode ? '' : `<select id="demo-profile" aria-label="Preview as team member" style="margin-top:6px;max-width:155px;background:#111923;border:1px solid #334253;color:#9eafc2;border-radius:6px;padding:4px;font-size:9px">${state.members.map((m)=>`<option value="${m.id}" ${m.id===currentMemberId?'selected':''}>${escapeHtml(m.name)}</option>`).join('')}</select>`}</div></div>
+          <div class="profile-menu"><button class="profile-mini profile-menu-toggle" id="profile-menu-toggle" type="button" aria-expanded="${profileMenuOpen}"><span class="avatar">${initials(me.name)}</span><span class="profile-menu-copy"><strong>${escapeHtml(me.name)}</strong><small>${isCurrentAssignee() ? 'Shift allocation owner' : 'Team member'} · ${remoteMode ? 'Signed in' : 'Preview'}</small></span><span class="profile-menu-chevron">⌄</span></button>${profileMenuOpen ? `<div class="profile-menu-popover">${remoteMode ? '<button type="button" id="profile-sign-out">↪ Sign out</button>' : '<span>Preview session</span>'}</div>` : ''}${remoteMode ? '' : `<select id="demo-profile" aria-label="Preview as team member" style="margin-top:6px;max-width:155px;background:#111923;border:1px solid #334253;color:#9eafc2;border-radius:6px;padding:4px;font-size:9px">${state.members.map((m)=>`<option value="${m.id}" ${m.id===currentMemberId?'selected':''}>${escapeHtml(m.name)}</option>`).join('')}</select>`}</div>
         </div>
       </aside>
       <main class="main">
-        <header class="topbar"><div><div class="eyebrow">${activeView === 'overview' ? 'Live operations' : 'Team workspace'}</div><h1 class="page-title">${viewTitle(activeView)}</h1></div><div class="top-actions"><button class="button button-secondary button-small utility-icon-button" id="sidebar-toggle" type="button" aria-label="${sidebarCollapsed ? 'Show' : 'Hide'} sidebar" title="${sidebarCollapsed ? 'Show' : 'Hide'} sidebar">☰</button>${remoteMode ? '<button class="button button-secondary button-small utility-icon-button" id="sign-out" type="button" aria-label="Sign out" title="Sign out">↪</button>' : ''}<span id="workspace-clock" class="digital-clock" aria-label="Workspace time">--:--:--</span>${remoteMode ? '<span class="live-pill"><i class="live-dot"></i> Live sync</span>' : '<span class="demo-pill">● Local preview</span>'}<button class="button button-secondary button-small" id="refresh-workspace">↻ Refresh</button><button class="button button-secondary button-small" id="new-request-top">＋ New request</button></div></header>
+        <header class="topbar"><div class="topbar-title-wrap">${sidebarCollapsed ? '<button class="button button-secondary button-small utility-icon-button" id="sidebar-toggle" type="button" aria-label="Show sidebar" title="Show sidebar">☰</button>' : ''}<div><div class="eyebrow">${activeView === 'overview' ? 'Live operations' : 'Team workspace'}</div><h1 class="page-title">${viewTitle(activeView)}</h1></div></div><div class="top-actions"><button class="mobile-profile-toggle" id="profile-menu-mobile-toggle" type="button" aria-label="Account menu" aria-expanded="${profileMenuOpen}">${initials(me.name)}</button>${profileMenuOpen ? '<div class="mobile-profile-popover"><button type="button" id="profile-sign-out-mobile">↪ Sign out</button></div>' : ''}<span id="workspace-clock" class="digital-clock" aria-label="Workspace time">--:--:--</span>${remoteMode ? '<span class="live-pill"><i class="live-dot"></i> Live sync</span>' : '<span class="demo-pill">● Local preview</span>'}<button class="button button-secondary button-small" id="refresh-workspace">↻ Refresh</button><button class="button button-secondary button-small" id="new-request-top">＋ New request</button></div></header>
         <section class="section-view ${activeView === 'overview' ? 'active' : ''}" id="view-overview">${renderOverview(me, assignee, counts, statuses)}</section>
         <section class="section-view ${activeView === 'schedule' ? 'active' : ''}" id="view-schedule">${renderSchedule(me)}</section>
         <section class="section-view ${activeView === 'requests' ? 'active' : ''}" id="view-requests">${renderRequests(me)}</section>
         <section class="section-view ${activeView === 'allocation' ? 'active' : ''}" id="view-allocation">${renderAllocation(me, assignee)}</section>
         <section class="section-view ${activeView === 'reports' ? 'active' : ''}" id="view-reports">${renderReports()}</section>
         ${currentIsAdmin ? `<section class="section-view ${activeView === 'admin' ? 'active' : ''}" id="view-admin">${renderAdmin()}</section>` : ''}
+        <footer class="app-footer">WHO'S next · All rights reserved 2026 · Beta · v1.0</footer>
       </main>
     </div>`;
   if (remoteMode) initializeNotificationCenter({ supabase, memberId: currentMemberId });
   $$('.nav button').forEach((button) => button.addEventListener('click', () => { activeView = button.dataset.view; renderApp(); }));
   $('#new-request-top')?.addEventListener('click', openRequestDialog);
   $('#sidebar-toggle')?.addEventListener('click', toggleSidebar);
-  $('#sign-out')?.addEventListener('click', signOut);
+  $('#profile-menu-toggle')?.addEventListener('click', () => { profileMenuOpen = !profileMenuOpen; renderApp(); });
+  $('#profile-menu-mobile-toggle')?.addEventListener('click', () => { profileMenuOpen = !profileMenuOpen; renderApp(); });
+  $('#profile-sign-out')?.addEventListener('click', signOut);
+  $('#profile-sign-out-mobile')?.addEventListener('click', signOut);
+  $('[data-admin-role-save]').forEach((button) => button.addEventListener('click', () => saveAdminRole(button.dataset.adminRoleSave)));
   $('#refresh-workspace')?.addEventListener('click', async () => { try { if (remoteMode) await reloadRemote(); else renderApp(); toast('Workspace refreshed.'); } catch (error) { toast(error.message || 'Refresh failed.', true); } });
   $('#demo-profile')?.addEventListener('change', (event) => { currentMemberId = event.target.value; localStorage.setItem(PROFILE_KEY, currentMemberId); renderApp(); });
   bindViewActions();
@@ -406,19 +512,27 @@ async function maybeAutoCheckIn() {
 function toggleSidebar() {
   sidebarCollapsed = !sidebarCollapsed;
   localStorage.setItem('whos-next-sidebar-collapsed', String(sidebarCollapsed));
-  $('.layout')?.classList.toggle('sidebar-collapsed', sidebarCollapsed);
-  const button = $('#sidebar-toggle');
-  if (button) {
-    button.setAttribute('aria-label', `${sidebarCollapsed ? 'Show' : 'Hide'} sidebar`);
-    button.title = `${sidebarCollapsed ? 'Show' : 'Hide'} sidebar`;
-  }
+  renderApp();
 }
 
 async function signOut() {
   if (!remoteMode || !supabase) return;
-  const button = $('#sign-out');
+  const alternatives = queueMembers().filter((member) => member.id !== currentMemberId);
+  if (!alternatives.length && !window.confirm('You are the only active eligible colleague in the queue. Kindly wait for the next shift person to log in to avoid an SLA breach. Do you still want to sign out?')) return;
+  if (!window.confirm('Are you sure you want to sign out? Your presence will be set Offline and allocation responsibility will be handed over if another eligible colleague is online.')) return;
+  const button = $('#profile-sign-out') || $('#profile-sign-out-mobile');
   if (button) button.disabled = true;
   try {
+    const latestAttendance = latestAttendanceForCurrentMember();
+    if (latestAttendance?.eventType === 'check_in') {
+      const { error: checkoutError } = await supabase.rpc('record_attendance', { p_event_type: 'check_out' });
+      if (checkoutError) throw checkoutError;
+    }
+    const { error: offlineError } = await supabase.rpc('set_member_offline');
+    if (offlineError) throw offlineError;
+    const { error: handoverError } = await supabase.rpc('ensure_shift_assignee');
+    if (handoverError) throw handoverError;
+    stopPresenceTracking();
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     window.location.reload();
@@ -471,7 +585,7 @@ function renderOverview(me, assignee, counts, statuses) {
       </section>
     </div>
     <section class="panel team-panel" style="margin-bottom:16px"><div class="panel-head"><div><div class="panel-title">Team availability</div><div class="panel-subtitle">Eligibility is recalculated from the current shift and approved time windows</div></div><span class="panel-subtitle">${counts.available} available / ${statuses.length} total</span></div>
-      <div class="table-wrap"><table class="team-table"><thead><tr><th>Team member</th><th>Shift</th><th>Status</th><th>Reason</th><th>Expected return</th></tr></thead><tbody>${statuses.map(({ member, status }) => `<tr><td><div class="employee-cell"><span class="avatar">${initials(member.name)}</span><div><strong>${escapeHtml(member.name)}</strong><small>${member.id === currentMemberId ? 'You' : 'Team member'}</small></div></div></td><td>${member.shift ? `${member.shift.start} – ${member.shift.end}` : '—'}</td><td>${statusPill(status)}</td><td>${escapeHtml(status.reason)}</td><td class="return-time">${returnLabel(status)}</td></tr>`).join('')}</tbody></table></div>
+      <div class="table-wrap"><table class="team-table"><thead><tr><th>Team member</th><th>Presence</th><th>Shift</th><th>Status</th><th>Reason</th><th>Expected return</th></tr></thead><tbody>${statuses.map(({ member, status, presence }) => `<tr><td><div class="employee-cell"><span class="avatar">${initials(member.name)}</span><div><strong>${escapeHtml(member.name)}</strong><small>${member.id === currentMemberId ? 'You' : 'Team member'}</small></div></div></td><td><span class="presence-pill presence-${presence}">${presence === 'active' ? 'Active' : presence === 'away' ? 'Away' : 'Offline'}</span></td><td>${member.shift ? `${member.shift.start} – ${member.shift.end}` : '—'}</td><td>${statusPill(status)}</td><td>${escapeHtml(status.reason)}</td><td class="return-time">${returnLabel(status)}</td></tr>`).join('')}</tbody></table></div>
     </section>
     <div class="bottom-grid"><section class="panel"><div class="panel-head"><div><div class="panel-title">Requests to review</div><div class="panel-subtitle">Pending requests transfer with the assignee handover</div></div><button class="text-link" data-go="requests">View all →</button></div><div class="request-list">${pending.length ? pending.map(renderRequestCard).join('') : '<div class="empty-state">No pending requests. Your approval queue is clear.</div>'}</div></section>
       <section class="panel"><div class="panel-head"><div><div class="panel-title">Recent allocation activity</div><div class="panel-subtitle">Latest assignments recorded</div></div><button class="text-link" data-go="reports">View reports →</button></div><div class="activity-list">${allocations.length ? allocations.map((item) => { const recipient = state.members.find((m) => m.id === item.memberId); const assigner = state.members.find((m) => m.id === item.assignedBy); return `<div class="activity-item"><span class="activity-icon">⇄</span><div class="activity-copy"><p><strong>${escapeHtml(recipient?.name || 'Unknown member')}</strong> received an allocation from ${escapeHtml(assigner?.name || 'Unknown assignee')} ${item.reference ? `· ${escapeHtml(item.reference)}` : ''}</p><small>${prettyDateTime(item.assignedAt)}</small></div></div>`; }).join('') : '<div class="empty-state">No allocations have been recorded yet.</div>'}</div></section></div>`;
@@ -479,7 +593,7 @@ function renderOverview(me, assignee, counts, statuses) {
 
 function renderRequestCard(request) {
   const owner = state.members.find((member) => member.id === request.memberId);
-  const canReview = isCurrentAssignee() && request.status === 'pending' && request.memberId !== currentMemberId;
+  const canReview = (isCurrentAssignee() || (request.type === 'extended_break' && currentIsAdmin)) && request.status === 'pending' && request.memberId !== currentMemberId;
   return `<article class="request-card"><span class="avatar">${initials(owner?.name || '?')}</span><div class="request-content"><strong>${escapeHtml(owner?.name || 'Unknown member')} · ${escapeHtml(REQUEST_TYPES[request.type] || request.type)}</strong><p>${escapeHtml(request.reason || 'No reason provided')} · ${prettyDateTime(request.startAt)} – ${prettyTime(request.endAt)}</p><span class="request-time">Submitted ${prettyDateTime(request.createdAt)} · ${escapeHtml(request.status)}</span>${canReview ? `<div class="request-actions"><button class="button button-primary" data-review="${request.id}" data-decision="approved">Approve</button><button class="button button-danger" data-review="${request.id}" data-decision="rejected">Reject</button></div>` : ''}</div></article>`;
 }
 
@@ -488,7 +602,7 @@ function renderSchedule(me) {
   const breaks = state.breaks.filter((item) => item.memberId === currentMemberId).sort((a, b) => `${a.date}${a.start}`.localeCompare(`${b.date}${b.start}`));
   return `<div class="page-toolbar"><div><div class="panel-title">Your shifts & breaks</div><div class="panel-subtitle">Manage only your own schedule. Changes are retained in history.</div></div><div class="toolbar-actions"><button class="button button-secondary" id="add-break">＋ Add break</button><button class="button button-secondary" id="new-shift-swap">⇄ Request swap</button><button class="button button-primary" id="set-shift">＋ Set shift</button></div></div>
     <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Scheduled shifts</div><div class="panel-subtitle">${shifts.length} shift record(s)</div></div></div><div class="schedule-list">${shifts.length ? shifts.map((shift) => `<div class="schedule-row"><div><strong>${prettyDate(shift.date)}</strong><small style="display:block">${escapeHtml(SHIFT_PRESETS[shift.key]?.label || shift.key || 'Custom shift')}</small></div><div>${shift.start}</div><div>${shift.end}</div><div><button class="button button-secondary button-small" data-edit-shift="${shift.id}">Edit</button></div></div>`).join('') : '<div class="empty-state">No shifts have been entered. Add your first shift to appear in the team schedule.</div>'}</div></section>
-    <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Planned breaks</div><div class="panel-subtitle">Breaks are used to calculate eligibility during the selected time window</div></div></div><div class="schedule-list">${breaks.length ? breaks.map((item) => `<div class="schedule-row"><div><strong>${prettyDate(item.date)}</strong><small style="display:block">${item.breakType === 'meal' ? 'Meal break' : 'BioBreak'} · ${escapeHtml(item.note || 'Scheduled break')}</small></div><div>${item.start}</div><div>${item.end}</div><div><span class="status muted">Scheduled</span></div></div>`).join('') : '<div class="empty-state">No breaks planned yet.</div>'}</div></section>
+    <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Planned breaks</div><div class="panel-subtitle">60 minutes total per shift. Additional time needs SME or Super Admin approval.</div></div></div><div class="schedule-list">${breaks.length ? breaks.map((item) => `<div class="schedule-row"><div><strong>${prettyDate(item.date)}</strong><small style="display:block">${item.breakType === 'meal' ? 'Meal break' : 'BioBreak'} · ${escapeHtml(item.note || 'Scheduled break')}</small></div><div>${item.start}</div><div>${item.end}</div><div><span class="status muted">Scheduled</span></div></div>`).join('') : '<div class="empty-state">No breaks planned yet.</div>'}</div></section>
     <section class="panel"><div class="panel-head"><div><div class="panel-title">One-day shift swaps</div><div class="panel-subtitle">A swap takes effect only after the invited colleague accepts</div></div></div><div class="request-list">${(state.shiftSwaps || []).filter((swap) => swap.requesterMemberId === currentMemberId || swap.partnerMemberId === currentMemberId).length ? (state.shiftSwaps || []).filter((swap) => swap.requesterMemberId === currentMemberId || swap.partnerMemberId === currentMemberId).map(renderShiftSwapCard).join('') : '<div class="empty-state">No shift swap requests involving you.</div>'}</div></section>`;
 }
 
@@ -541,14 +655,15 @@ async function loadAdminRoster() {
 }
 
 function renderAdmin() {
-  return `<div class="page-toolbar"><div><div class="panel-title">Team administration</div><div class="panel-subtitle">Manage member profiles, access codes and shift schedules. Admin permissions are checked in Supabase.</div></div><button class="button button-primary" id="admin-add-member">＋ Add member</button></div>
-    <div class="notice">Access codes are shown only once when created or rotated. Share each code privately with its owner. Never paste access codes into team chat or source control.</div>
-    <section class="panel"><div class="panel-head"><div><div class="panel-title">Team roster</div><div class="panel-subtitle">${adminRoster.length} member profile(s)</div></div></div>
+  return `<div class="page-toolbar"><div><div class="panel-title">Team administration</div><div class="panel-subtitle">Super Admin and SME have the same workspace permissions.</div></div><button class="button button-primary" id="admin-add-member">＋ Add member</button></div>
+    <section class="panel"><div class="panel-head"><div><div class="panel-title">Team roster & access</div><div class="panel-subtitle">${adminRoster.length} member profile(s)</div></div></div>
       <div class="schedule-list">${adminRoster.length ? adminRoster.map((member) => {
         const shift = state.shifts.find((item) => item.memberId === member.id && item.date === localDate()) || null;
-        return `<article class="admin-member-row"><div class="admin-member-main"><span class="avatar">${initials(member.name)}</span><div><strong>${escapeHtml(member.name)}</strong><small>${member.active ? 'Active member' : 'Deactivated'} · ${shift ? `${shift.start}–${shift.end}` : 'No shift today'}</small></div></div><div class="admin-member-actions"><button class="button button-secondary button-small" data-admin-shift="${member.id}">Shift</button><button class="button button-secondary button-small" data-admin-name="${member.id}">Rename</button><button class="button button-secondary button-small" data-admin-rotate="${member.id}">New code</button><button class="button button-${member.active ? 'danger' : 'secondary'} button-small" data-admin-toggle="${member.id}" data-active="${member.active}">${member.active ? 'Deactivate' : 'Activate'}</button></div></article>`;
+        const role = member.adminRole || 'none';
+        return `<article class="admin-member-row"><div class="admin-member-main"><span class="avatar">${initials(member.name)}</span><div><strong>${escapeHtml(member.name)}</strong><small>${member.active ? 'Active member' : 'Deactivated'} · ${shift ? `${shift.start}–${shift.end}` : 'No shift today'} · ${role === 'super_admin' ? 'Super Admin' : role === 'sme' ? 'SME' : 'Team member'}</small></div></div><div class="admin-member-actions"><select class="admin-role-select" id="admin-role-${member.id}" aria-label="Access role for ${escapeAttr(member.name)}"><option value="none" ${role === 'none' ? 'selected' : ''}>Member</option><option value="sme" ${role === 'sme' ? 'selected' : ''}>SME</option><option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>Super Admin</option></select><button class="button button-secondary button-small" data-admin-role-save="${member.id}">Save role</button><button class="button button-secondary button-small" data-admin-shift="${member.id}">Shift</button><button class="button button-secondary button-small" data-admin-name="${member.id}">Rename</button><button class="button button-secondary button-small" data-admin-rotate="${member.id}">New code</button><button class="button button-${member.active ? 'danger' : 'secondary'} button-small" data-admin-toggle="${member.id}" data-active="${member.active}">${member.active ? 'Deactivate' : 'Activate'}</button></div></article>`;
       }).join('') : '<div class="empty-state">No members found. Add the first team member to get started.</div>'}</div>
-    </section>`;
+    </section>
+    <section class="panel admin-report-panel"><div class="panel-head"><div><div class="panel-title">Shift allocation report</div><div class="panel-subtitle">Fresh emails and existing tickets assigned per member.</div></div></div><div class="toolbar-actions"><div class="field"><label for="admin-report-date">Workspace date</label><input id="admin-report-date" type="date" value="${localDate()}"/></div><button class="button button-secondary" id="admin-run-report">Load report</button></div><div id="admin-shift-report" class="empty-state">Choose a date to view the allocation summary.</div></section>`;
 }
 
 function showOneTimeAccessCode(memberName, code) {
@@ -579,6 +694,39 @@ async function rotateMemberCode(memberId) {
     await loadAdminRoster();
     toast('Access code rotated. Share the new code privately.');
   } catch (error) { toast(error.message || 'Unable to rotate access code.', true); }
+}
+
+async function saveAdminRole(memberId) {
+  const select = document.getElementById(`admin-role-${memberId}`);
+  if (!select) return;
+  const role = select.value;
+  const member = adminRoster.find((item) => item.id === memberId);
+  if (!member) return;
+  const label = role === 'super_admin' ? 'Super Admin' : role === 'sme' ? 'SME' : 'regular member';
+  if (!window.confirm(`Set ${member.name} as ${label}? Super Admin and SME have identical workspace permissions.`)) return;
+  try {
+    const { error } = await supabase.rpc('admin_set_member_role', { p_member_id: memberId, p_role: role });
+    if (error) throw error;
+    await loadAdminRoster();
+    toast(`${member.name} access updated.`);
+  } catch (error) { toast(error.message || 'Unable to update admin access.', true); }
+}
+
+async function runAdminShiftReport() {
+  const date = $('#admin-report-date')?.value;
+  if (!date) return toast('Choose a report date.', true);
+  const target = $('#admin-shift-report');
+  if (target) target.textContent = 'Loading report…';
+  try {
+    const { data, error } = await supabase.rpc('admin_shift_allocation_report', { p_work_date: date });
+    if (error) throw error;
+    const rows = data?.members || [];
+    if (!target) return;
+    target.className = 'admin-report-table';
+    target.innerHTML = rows.length ? `<div class="table-wrap"><table class="team-table"><thead><tr><th>Team member</th><th>Fresh emails</th><th>Existing tickets</th><th>Total</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${escapeHtml(row.memberName)}</td><td>${Number(row.freshEmails) || 0}</td><td>${Number(row.existingTickets) || 0}</td><td><strong>${Number(row.total) || 0}</strong></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty-state">No active team members found.</div>';
+  } catch (error) {
+    if (target) target.textContent = error.message || 'Unable to load report.';
+  }
 }
 
 async function toggleMemberActive(memberId, active) {
@@ -665,6 +813,7 @@ function bindViewActions() {
   $$('[data-edit-shift]').forEach((button) => button.addEventListener('click', () => openShiftDialog(button.dataset.editShift)));
   $('#export-csv')?.addEventListener('click', exportAllocations);
   $('#admin-add-member')?.addEventListener('click', openAdminAddMemberDialog);
+  $('#admin-run-report')?.addEventListener('click', runAdminShiftReport);
   document.querySelectorAll('[data-admin-rotate]').forEach((button) => button.addEventListener('click', () => rotateMemberCode(button.dataset.adminRotate)));
   document.querySelectorAll('[data-admin-toggle]').forEach((button) => button.addEventListener('click', () => toggleMemberActive(button.dataset.adminToggle, button.dataset.active === 'true')));
   document.querySelectorAll('[data-admin-name]').forEach((button) => button.addEventListener('click', () => renameMember(button.dataset.adminName)));
@@ -738,7 +887,7 @@ function openBreakDialog(extension = false) {
     defaultEnd = localTime(addMinutes(extensionStart, 30));
   }
   openDialog(extension ? 'Extend your current break' : 'Plan a break',
-    extension ? 'The extension starts when your current break was due to end. You return to the queue when the extended window ends.' : 'A planned break removes you from the allocation queue only during its scheduled window.',
+    extension ? 'The extension starts when your current break was due to end. You return to the queue when the extended window ends.' : 'A maximum of 60 minutes is allowed per shift. Extra time requires an approved extended-break request.',
     `<div class="form-grid"><div class="field"><label for="break-date">Date</label><input id="break-date" name="date" type="date" required value="${breakDate}" /></div><div class="field"><label for="break-type">Break type</label><select id="break-type" name="breakType"><option value="bio">BioBreak</option><option value="meal">Meal break</option></select></div><div class="field"><label for="break-note">Note (optional)</label><input id="break-note" name="note" maxlength="100" value="${extension ? 'Break extension' : 'Scheduled break'}" /></div><div class="field"><label for="break-start">Start</label><input id="break-start" name="start" type="time" required value="${breakStart}" /></div><div class="field"><label for="break-end">End</label><input id="break-end" name="end" type="time" required value="${defaultEnd}" /></div></div>`,
     extension ? 'Extend break' : 'Save break', async (form) => {
       const item = { id: id(), memberId: currentMemberId, date: form.get('date'), start: form.get('start'), end: form.get('end'), note: form.get('note').trim(), breakType: form.get('breakType') || 'bio' };
@@ -816,10 +965,12 @@ async function takeOver() {
 }
 
 async function reviewRequest(requestId, decision) {
-  if (!isCurrentAssignee()) return toast('Only the current assignee can review requests.', true);
   const request = state.requests.find((item) => item.id === requestId);
   if (!request || request.status !== 'pending') return toast('This request has already been reviewed.', true);
-  const confirmation = window.prompt('Manager / SME / TL confirmation (optional):', '');
+  if (!isCurrentAssignee() && !(request.type === 'extended_break' && currentIsAdmin)) {
+    return toast('Only the current assignee or an SME/Super Admin can review this break request.', true);
+  }
+  const confirmation = window.prompt('SME / Super Admin confirmation (optional):', '');
   if (confirmation === null) return;
   try {
     if (remoteMode) await rpc('review_availability_request', { p_request_id: requestId, p_decision: decision, p_confirmation: confirmation.trim() || null });

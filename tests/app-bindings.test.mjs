@@ -33,7 +33,8 @@ test('mobile admin navigation has six columns and top actions can wrap', () => {
 
 test('workspace includes persistent sidebar controls, sign-out and shift auto check-in', () => {
   assert.match(appSource, /id="sidebar-toggle"/);
-  assert.match(appSource, /id="sign-out"/);
+  assert.match(appSource, /id="profile-sign-out"/);
+  assert.match(appSource, /set_member_offline/);
   assert.match(appSource, /await maybeAutoCheckIn\(\)/);
   assert.match(appSource, /record_attendance', \{ p_event_type: 'check_in' \}/);
 });
