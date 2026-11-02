@@ -7,3 +7,4 @@ config.local.js
 node_modules/
 coverage/
 .netlify/
+config.js
