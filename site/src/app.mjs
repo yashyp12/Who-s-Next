@@ -361,7 +361,7 @@ function renderApp() {
         </div>
       </aside>
       <main class="main">
-        <header class="topbar"><div class="topbar-title-wrap">${sidebarCollapsed ? '<button class="button button-secondary button-small utility-icon-button" id="sidebar-toggle" type="button" aria-label="Show sidebar" title="Show sidebar">☰</button>' : ''}<div><div class="eyebrow">${activeView === 'overview' ? 'Live operations' : 'Team workspace'}</div><h1 class="page-title">${viewTitle(activeView)}</h1></div></div><div class="top-actions"><span id="workspace-clock" class="digital-clock" aria-label="Workspace time">--:--:--</span>${remoteMode ? '<span class="live-pill"><i class="live-dot"></i> Live sync</span>' : '<span class="demo-pill">● Local preview</span>'}<button class="button button-secondary button-small" id="refresh-workspace">↻ Refresh</button><button class="button button-secondary button-small" id="new-request-top">＋ New request</button></div></header>
+        <header class="topbar"><div class="topbar-title-wrap">${sidebarCollapsed ? '<button class="button button-secondary button-small utility-icon-button" id="sidebar-toggle" type="button" aria-label="Show sidebar" title="Show sidebar">☰</button>' : ''}<div><div class="eyebrow">${activeView === 'overview' ? 'Live operations' : 'Team workspace'}</div><h1 class="page-title">${viewTitle(activeView)}</h1></div></div><div class="top-actions"><button class="mobile-profile-toggle" id="profile-menu-mobile-toggle" type="button" aria-label="Account menu" aria-expanded="${profileMenuOpen}">${initials(me.name)}</button>${profileMenuOpen ? '<div class="mobile-profile-popover"><button type="button" id="profile-sign-out-mobile">↪ Sign out</button></div>' : ''}<span id="workspace-clock" class="digital-clock" aria-label="Workspace time">--:--:--</span>${remoteMode ? '<span class="live-pill"><i class="live-dot"></i> Live sync</span>' : '<span class="demo-pill">● Local preview</span>'}<button class="button button-secondary button-small" id="refresh-workspace">↻ Refresh</button><button class="button button-secondary button-small" id="new-request-top">＋ New request</button></div></header>
         <section class="section-view ${activeView === 'overview' ? 'active' : ''}" id="view-overview">${renderOverview(me, assignee, counts, statuses)}</section>
         <section class="section-view ${activeView === 'schedule' ? 'active' : ''}" id="view-schedule">${renderSchedule(me)}</section>
         <section class="section-view ${activeView === 'requests' ? 'active' : ''}" id="view-requests">${renderRequests(me)}</section>
@@ -376,7 +376,9 @@ function renderApp() {
   $('#new-request-top')?.addEventListener('click', openRequestDialog);
   $('#sidebar-toggle')?.addEventListener('click', toggleSidebar);
   $('#profile-menu-toggle')?.addEventListener('click', () => { profileMenuOpen = !profileMenuOpen; renderApp(); });
+  $('#profile-menu-mobile-toggle')?.addEventListener('click', () => { profileMenuOpen = !profileMenuOpen; renderApp(); });
   $('#profile-sign-out')?.addEventListener('click', signOut);
+  $('#profile-sign-out-mobile')?.addEventListener('click', signOut);
   $('[data-admin-role-save]').forEach((button) => button.addEventListener('click', () => saveAdminRole(button.dataset.adminRoleSave)));
   $('#refresh-workspace')?.addEventListener('click', async () => { try { if (remoteMode) await reloadRemote(); else renderApp(); toast('Workspace refreshed.'); } catch (error) { toast(error.message || 'Refresh failed.', true); } });
   $('#demo-profile')?.addEventListener('change', (event) => { currentMemberId = event.target.value; localStorage.setItem(PROFILE_KEY, currentMemberId); renderApp(); });
@@ -519,7 +521,7 @@ async function signOut() {
   const alternatives = queueMembers().filter((member) => member.id !== currentMemberId);
   if (!alternatives.length && !window.confirm('You are the only active eligible colleague in the queue. Kindly wait for the next shift person to log in to avoid an SLA breach. Do you still want to sign out?')) return;
   if (!window.confirm('Are you sure you want to sign out? Your presence will be set Offline and allocation responsibility will be handed over if another eligible colleague is online.')) return;
-  const button = $('#profile-sign-out');
+  const button = $('#profile-sign-out') || $('#profile-sign-out-mobile');
   if (button) button.disabled = true;
   try {
     const latestAttendance = latestAttendanceForCurrentMember();
