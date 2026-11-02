@@ -188,10 +188,13 @@ async function refreshPresence() {
   const { data, error } = await supabase.rpc('get_workspace_presence');
   if (error) throw error;
   const next = Array.isArray(data) ? data : [];
-  if (JSON.stringify(state?.presence || []) !== JSON.stringify(next)) {
-    if (state) state.presence = next;
-    if (state && currentMember()) renderApp();
-  }
+  const current = state?.presence || [];
+  const changed = next.length !== current.length || next.some((item) => {
+    const previous = current.find((entry) => entry.memberId === item.memberId);
+    return !previous || previous.status !== item.status;
+  });
+  if (state) state.presence = next;
+  if (changed && state && currentMember()) renderApp();
 }
 
 function startPresenceTracking() {
