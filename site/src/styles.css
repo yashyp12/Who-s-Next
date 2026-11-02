@@ -546,7 +546,7 @@
 .layout.sidebar-collapsed{grid-template-columns:0 minmax(0,1fr)}
 .layout.sidebar-collapsed>.sidebar{display:flex;width:0;min-width:0;padding-left:0;padding-right:0;border-right-color:transparent;opacity:0;transform:translateX(-14px);pointer-events:none}
 @media(max-width:1100px){.topbar{gap:14px}.top-actions{gap:7px}.top-actions .button{padding:9px 10px}}
-@media(max-width:900px){
+@media(max-width:1100px){
  .topbar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px}
  .topbar-title-wrap{grid-column:1/-1}
  .digital-clock{position:static;transform:none;grid-column:1;justify-self:start}
@@ -561,7 +561,8 @@
  .digital-clock{justify-self:center;font-size:16px}
  .top-actions{width:100%;justify-content:center;flex-wrap:wrap;white-space:normal}
  .top-actions .live-pill,.top-actions .demo-pill{display:flex}
- .top-actions .mobile-profile-toggle{display:none}
+ .top-actions .mobile-profile-toggle{display:inline-flex;align-items:center;justify-content:center}
+ .top-actions .mobile-profile-popover{display:block;position:absolute;right:12px;top:calc(100% + 8px);z-index:90;min-width:130px;padding:6px;border:1px solid var(--line);border-radius:10px;background:#18222d;box-shadow:0 14px 38px #0008}
 }
 @media(prefers-reduced-motion:reduce){.layout,.layout>.sidebar,.layout.sidebar-collapsed>.sidebar{transition:none!important}}
 
