@@ -653,6 +653,7 @@ begin
 end;
 $$;
 
-revoke execute on function public.broadcast_workspace_refresh() from public, anon, authenticated;
+revoke execute on function public.broadcast_workspace_refresh() from public, anon;
+grant execute on function public.broadcast_workspace_refresh() to authenticated;
 revoke execute on function public.review_availability_request(uuid,text,text) from public, anon;
 grant execute on function public.review_availability_request(uuid,text,text) to authenticated;
