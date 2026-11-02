@@ -603,6 +603,7 @@ function renderSchedule(me) {
   return `<div class="page-toolbar"><div><div class="panel-title">Your shifts & breaks</div><div class="panel-subtitle">Manage only your own schedule. Changes are retained in history.</div></div><div class="toolbar-actions"><button class="button button-secondary" id="add-break">＋ Add break</button><button class="button button-secondary" id="new-shift-swap">⇄ Request swap</button><button class="button button-primary" id="set-shift">＋ Set shift</button></div></div>
     <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Scheduled shifts</div><div class="panel-subtitle">${shifts.length} shift record(s)</div></div></div><div class="schedule-list">${shifts.length ? shifts.map((shift) => `<div class="schedule-row"><div><strong>${prettyDate(shift.date)}</strong><small style="display:block">${escapeHtml(SHIFT_PRESETS[shift.key]?.label || shift.key || 'Custom shift')}</small></div><div>${shift.start}</div><div>${shift.end}</div><div><button class="button button-secondary button-small" data-edit-shift="${shift.id}">Edit</button></div></div>`).join('') : '<div class="empty-state">No shifts have been entered. Add your first shift to appear in the team schedule.</div>'}</div></section>
     <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Planned breaks</div><div class="panel-subtitle">60 minutes total per shift. Additional time needs SME or Super Admin approval.</div></div></div><div class="schedule-list">${breaks.length ? breaks.map((item) => `<div class="schedule-row"><div><strong>${prettyDate(item.date)}</strong><small style="display:block">${item.breakType === 'meal' ? 'Meal break' : 'BioBreak'} · ${escapeHtml(item.note || 'Scheduled break')}</small></div><div>${item.start}</div><div>${item.end}</div><div><span class="status muted">Scheduled</span></div></div>`).join('') : '<div class="empty-state">No breaks planned yet.</div>'}</div></section>
+    <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">My availability requests</div><div class="panel-subtitle">Edit pending requests or withdraw your own pending and active approved requests. Reviewed history stays visible.</div></div><button class="button button-primary button-small" id="new-request-profile">＋ New request</button></div><div class="request-list">${state.requests.filter((request) => request.memberId === currentMemberId).sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt)).length ? state.requests.filter((request) => request.memberId === currentMemberId).sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt)).map(renderOwnAvailabilityRequestCard).join('') : '<div class="empty-state">You have not submitted any availability requests.</div>'}</div></section>
     <section class="panel"><div class="panel-head"><div><div class="panel-title">One-day shift swaps</div><div class="panel-subtitle">A swap takes effect only after the invited colleague accepts</div></div></div><div class="request-list">${(state.shiftSwaps || []).filter((swap) => swap.requesterMemberId === currentMemberId || swap.partnerMemberId === currentMemberId).length ? (state.shiftSwaps || []).filter((swap) => swap.requesterMemberId === currentMemberId || swap.partnerMemberId === currentMemberId).map(renderShiftSwapCard).join('') : '<div class="empty-state">No shift swap requests involving you.</div>'}</div></section>`;
 }
 
@@ -807,7 +808,10 @@ function bindViewActions() {
   $('#extend-break')?.addEventListener('click', () => openBreakDialog(true));
   document.querySelectorAll('#set-shift').forEach((button) => button.addEventListener('click', () => openShiftDialog()));
   $('#new-shift-swap')?.addEventListener('click', openShiftSwapDialog);
-  $$('[data-swap-response]').forEach((button) => button.addEventListener('click', () => respondShiftSwap(button.dataset.swapResponse, button.dataset.accept === 'true')));
+  $('#new-request-profile')?.addEventListener('click', openRequestDialog);
+  $('[data-edit-own-request]').forEach((button) => button.addEventListener('click', () => openRequestDialog(button.dataset.editOwnRequest)));
+  $('[data-withdraw-request]').forEach((button) => button.addEventListener('click', () => withdrawOwnRequest(button.dataset.withdrawRequest)));
+  $('[data-swap-response]').forEach((button) => button.addEventListener('click', () => respondShiftSwap(button.dataset.swapResponse, button.dataset.accept === 'true')));
   $('#new-request-page')?.addEventListener('click', openRequestDialog);
   $$('[data-review]').forEach((button) => button.addEventListener('click', () => reviewRequest(button.dataset.review, button.dataset.decision)));
   $$('[data-edit-shift]').forEach((button) => button.addEventListener('click', () => openShiftDialog(button.dataset.editShift)));
@@ -828,17 +832,62 @@ function openDialog(title, description, fields, submitLabel, onSubmit) {
   dialog.showModal();
 }
 
-function openRequestDialog() {
-  const now = new Date(); const later = addMinutes(now, 45);
-  const options = Object.entries(REQUEST_TYPES).map(([value, label]) => `<option value="${value}">${escapeHtml(label)}</option>`).join('');
-  openDialog('Raise an availability request', 'Pending requests do not remove you from the allocation queue. Only an approved request changes eligibility.', `
-    <div class="form-grid"><div class="field"><label for="request-type">Request type</label><select id="request-type" name="type" required>${options}</select></div><div class="field"><label for="request-reason">Short reason</label><input id="request-reason" name="reason" maxlength="100" required placeholder="e.g. Daily operations sync" /></div><div class="field"><label for="request-start">Start</label><input id="request-start" name="startAt" type="datetime-local" required value="${localDateTime(now)}" /></div><div class="field"><label for="request-end">Expected end</label><input id="request-end" name="endAt" type="datetime-local" required value="${localDateTime(later)}" /></div><div class="field full"><label for="request-details">Additional details (optional)</label><textarea id="request-details" name="details" maxlength="500" placeholder="Add context for the current assignee"></textarea></div></div>`, 'Submit request', async (form) => {
-    const request = { id: id(), memberId: currentMemberId, type: form.get('type'), reason: form.get('reason').trim(), details: form.get('details').trim(), startAt: workspaceInputToIso(form.get('startAt')), endAt: workspaceInputToIso(form.get('endAt')) };
-    const error = validateRequestPeriod(request.startAt, request.endAt); if (error) throw new Error(error);
-    if (remoteMode) await rpc('submit_availability_request', { p_type: request.type, p_reason: request.reason, p_details: request.details, p_start_at: request.startAt, p_end_at: request.endAt });
-    else { Object.assign(request, { status: 'pending', createdAt: new Date().toISOString() }); state.requests.unshift(request); logActivity(`${currentMember().name} submitted a ${REQUEST_TYPES[request.type]} request.`, '↗'); saveDemoState(); }
-    await refreshAfterAction('Request submitted. It will remain pending until reviewed.');
-  });
+function openRequestDialog(existingId = null) {
+  const existing = existingId ? state.requests.find((item) => item.id === existingId && item.memberId === currentMemberId) : null;
+  if (existing && existing.status !== 'pending') return toast('Only pending requests can be edited.', true);
+  const now = new Date();
+  const later = addMinutes(now, 45);
+  const startValue = existing ? localDateTime(new Date(existing.startAt)) : localDateTime(now);
+  const endValue = existing ? localDateTime(new Date(existing.endAt)) : localDateTime(later);
+  const options = Object.entries(REQUEST_TYPES).map(([value, label]) => `<option value="${value}" ${existing?.type === value ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('');
+  openDialog(existing ? 'Update your availability request' : 'Raise an availability request',
+    existing ? 'You can edit your own request until the current assignee reviews it.' : 'Pending requests do not remove you from the allocation queue. Only an approved request changes eligibility.',
+    `
+    <div class="form-grid"><div class="field"><label for="request-type">Request type</label><select id="request-type" name="type" required>${options}</select></div><div class="field"><label for="request-reason">Short reason</label><input id="request-reason" name="reason" maxlength="100" required value="${escapeHtml(existing?.reason || '')}" placeholder="e.g. Daily operations sync" /></div><div class="field"><label for="request-start">Start</label><input id="request-start" name="startAt" type="datetime-local" required value="${startValue}" /></div><div class="field"><label for="request-end">Expected end</label><input id="request-end" name="endAt" type="datetime-local" required value="${endValue}" /></div><div class="field full"><label for="request-details">Additional details (optional)</label><textarea id="request-details" name="details" maxlength="500" placeholder="Add context for the current assignee">${escapeHtml(existing?.details || '')}</textarea></div></div>`,
+    existing ? 'Save changes' : 'Submit request', async (form) => {
+      const request = { id: existing?.id || id(), memberId: currentMemberId, type: form.get('type'), reason: form.get('reason').trim(), details: form.get('details').trim(), startAt: workspaceInputToIso(form.get('startAt')), endAt: workspaceInputToIso(form.get('endAt')) };
+      const error = validateRequestPeriod(request.startAt, request.endAt); if (error) throw new Error(error);
+      if (remoteMode) {
+        if (existing) await rpc('update_my_availability_request', { p_request_id: existing.id, p_type: request.type, p_reason: request.reason, p_details: request.details, p_start_at: request.startAt, p_end_at: request.endAt });
+        else await rpc('submit_availability_request', { p_type: request.type, p_reason: request.reason, p_details: request.details, p_start_at: request.startAt, p_end_at: request.endAt });
+      } else if (existing) {
+        Object.assign(existing, request);
+        logActivity(`${currentMember().name} updated an availability request.`, '↗');
+        saveDemoState();
+      } else {
+        Object.assign(request, { status: 'pending', createdAt: new Date().toISOString() });
+        state.requests.unshift(request);
+        logActivity(`${currentMember().name} submitted a ${REQUEST_TYPES[request.type]} request.`, '↗');
+        saveDemoState();
+      }
+      await refreshAfterAction(existing ? 'Your request was updated.' : 'Request submitted. It will remain pending until reviewed.');
+    });
+}
+
+function renderOwnAvailabilityRequestCard(request) {
+  const canEdit = request.status === 'pending';
+  const canWithdraw = request.status === 'pending' || (request.status === 'approved' && new Date(request.endAt).getTime() > Date.now());
+  const statusLabel = ({ pending: 'Awaiting review', approved: 'Approved', rejected: 'Declined', cancelled: 'Withdrawn by you' })[request.status] || request.status;
+  return `<article class="request-card"><span class="avatar">↗</span><div class="request-content"><strong>${escapeHtml(REQUEST_TYPES[request.type] || request.type)} · ${escapeHtml(statusLabel)}</strong><p>${escapeHtml(request.reason || 'No reason provided')} · ${prettyDateTime(request.startAt)} – ${prettyDateTime(request.endAt)}</p><span class="request-time">Submitted ${prettyDateTime(request.createdAt)}</span>${canEdit || canWithdraw ? `<div class="request-actions">${canEdit ? `<button class="button button-secondary" data-edit-own-request="${request.id}">Edit request</button>` : ''}${canWithdraw ? `<button class="button button-danger" data-withdraw-request="${request.id}">Withdraw request</button>` : ''}</div>` : ''}</div></article>`;
+}
+
+async function withdrawOwnRequest(requestId) {
+  const request = state.requests.find((item) => item.id === requestId && item.memberId === currentMemberId);
+  if (!request || !['pending', 'approved'].includes(request.status)) return toast('This request can no longer be withdrawn.', true);
+  if (request.status === 'approved' && new Date(request.endAt).getTime() <= Date.now()) return toast('This approved request has already ended; its history is retained.', true);
+  if (!window.confirm('Withdraw this request? If it is currently approved, you will become eligible again when your shift and presence also allow it.')) return;
+  try {
+    if (remoteMode) await rpc('withdraw_my_availability_request', { p_request_id: requestId });
+    else {
+      request.status = 'cancelled';
+      request.cancelledAt = new Date().toISOString();
+      logActivity(`${currentMember().name} withdrew an availability request.`, '↶');
+      saveDemoState();
+    }
+    await refreshAfterAction('Your request was withdrawn. Availability has been recalculated.');
+  } catch (error) {
+    toast(error.message || 'Unable to withdraw this request.', true);
+  }
 }
 
 function openShiftDialog(existingId = null) {
@@ -958,10 +1007,21 @@ async function respondShiftSwap(requestId, accept) {
 async function takeOver() {
   if (isCurrentAssignee()) return toast('You already own allocation responsibility.');
   try {
-    if (remoteMode) await rpc('take_over_allocation', {});
-    else { const old = currentAssignee(); state.handovers.unshift({ id: id(), fromMemberId: state.currentAssigneeId, toMemberId: currentMemberId, createdAt: new Date().toISOString() }); state.currentAssigneeId = currentMemberId; logActivity(`${currentMember().name} took over allocation from ${old?.name || 'the previous assignee'}.`, '⇄'); saveDemoState(); }
-    await refreshAfterAction('Allocation responsibility handed over to you. Pending requests are retained.');
-  } catch (error) { toast(error.message, true); }
+    if (remoteMode) {
+      const result = await rpc('take_over_allocation', {});
+      if (result?.current_assignee_id && result.current_assignee_id !== currentMemberId) throw new Error('The server did not assign allocation responsibility to your profile.');
+      await reloadRemote();
+      if (!isCurrentAssignee()) throw new Error('Takeover was not retained after eligibility checks. Withdraw any active approved unavailability request from My profile, confirm your shift is active, then try again.');
+    } else {
+      const old = currentAssignee();
+      state.handovers.unshift({ id: id(), fromMemberId: state.currentAssigneeId, toMemberId: currentMemberId, createdAt: new Date().toISOString() });
+      state.currentAssigneeId = currentMemberId;
+      logActivity(`${currentMember().name} took over allocation from ${old?.name || 'the previous assignee'}.`, '⇄');
+      saveDemoState();
+      renderApp();
+    }
+    toast('Allocation responsibility handed over to you. Pending requests are retained.');
+  } catch (error) { toast(error.message || 'Unable to take over allocation.', true); }
 }
 
 async function reviewRequest(requestId, decision) {
