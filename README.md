@@ -149,6 +149,7 @@ Do not run these steps against an existing production workspace without a backup
    supabase/migrations/202611020005_member_notifications.sql
    supabase/migrations/202611020006_shift_aware_presence_and_ticket_routing.sql
    supabase/migrations/202611020007_workspace_admin_controls.sql
+   supabase/migrations/202611020008_presence_break_roles.sql
    ```
 
 4. Edit `supabase/seed.sql` locally with the real roster and one unique random access code per member. Use codes of at least 16 characters, keep them out of Git, and share each code only with its matching colleague.
