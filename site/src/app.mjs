@@ -1,5 +1,5 @@
 import {
-  SHIFT_PRESETS, REQUEST_TYPES, getMemberStatus, getEligibleMembers,
+  SHIFT_PRESETS, REQUEST_TYPES, getMemberStatus, getEligibleMembers, getTicketEligibleMembers,
   recordAllocation, buildRotation, validateTimeRange, validateRequestPeriod, isBreakWithinShift, formatDuration,
 } from './domain.mjs';
 import { initializeNotificationCenter } from './notifications.mjs';
