@@ -10,6 +10,13 @@ let initialLoadComplete = false;
 let pollTimer = null;
 let notificationFetchInProgress = false;
 const seenNotificationIds = new Set();
+function rememberNotificationId(notificationId) {
+  if (!notificationId) return;
+  seenNotificationIds.add(notificationId);
+  if (seenNotificationIds.size > 500) {
+    seenNotificationIds.delete(seenNotificationIds.values().next().value);
+  }
+}
 const SOUND_KEY = 'whos-next-notification-sound';
 
 try {
@@ -99,7 +106,7 @@ function showLiveToast(item) {
 
 function notifyNewItem(item) {
   if (!item?.id || seenNotificationIds.has(item.id)) return;
-  seenNotificationIds.add(item.id);
+  rememberNotificationId(item.id);
   notifications = [item, ...notifications.filter((entry) => entry.id !== item.id)].slice(0, 30);
   renderList();
   showLiveToast(item);
