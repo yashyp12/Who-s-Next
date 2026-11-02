@@ -284,3 +284,65 @@
     margin-right: auto;
   }
 }
+
+
+/* Focused workspace polish: compact actions, clearer allocation trail, and collapsible navigation. */
+.brand-wordmark{display:block;width:min(100%,210px);height:auto;max-height:54px;object-fit:contain;object-position:left center}
+.utility-icon-button{width:38px;min-width:38px;height:38px;padding:0;font-size:17px}
+.layout.sidebar-collapsed{grid-template-columns:minmax(0,1fr)}
+.layout.sidebar-collapsed>.sidebar{display:none}
+.topbar{min-width:0}
+.top-actions{min-width:0;flex-wrap:wrap;justify-content:flex-end}
+.top-actions>*{flex:0 0 auto}
+.page-toolbar{min-width:0;align-items:flex-start}
+.page-toolbar>div:first-child{min-width:0;flex:1 1 280px}
+.toolbar-actions{min-width:0;display:grid;grid-template-columns:repeat(2,minmax(150px,1fr));gap:8px}
+.toolbar-actions .button{min-width:0;white-space:normal;line-height:1.25}
+.toolbar-actions #record-next{grid-column:1/-1}
+.allocation-log{display:grid;gap:0;min-width:0}
+.allocation-log-head,.allocation-log-item{display:grid;grid-template-columns:minmax(125px,1.1fr) minmax(125px,1fr) minmax(150px,1fr) minmax(150px,1.2fr);gap:14px;align-items:center}
+.allocation-log-head{padding:0 12px 10px;color:#8495a7;font-size:9px;font-weight:800;letter-spacing:1px;text-transform:uppercase}
+.allocation-log-item{position:relative;padding:13px 12px;border:1px solid #ffffff10;border-radius:12px;background:#ffffff05;margin-bottom:8px}
+.allocation-log-item:before{content:"";position:absolute;left:-1px;top:13px;bottom:13px;width:3px;border-radius:3px;background:var(--accent)}
+.allocation-log-cell{display:grid;gap:4px;min-width:0}
+.allocation-log-cell>small{color:var(--muted);font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+.allocation-log-cell>strong{font-size:11px;line-height:1.4;overflow-wrap:anywhere}
+.allocation-kind{color:var(--green);font-size:9px}
+.allocation-ticket{color:var(--accent)}
+.allocation-subject{display:block;color:#aebdca;font-size:10px;line-height:1.4;overflow-wrap:anywhere}
+.notification-center{position:relative;z-index:60;flex:0 0 auto}
+.notification-trigger{position:relative;display:grid;place-items:center;width:38px;height:38px;padding:0;border:1px solid var(--line);border-radius:11px;background:var(--surface-2);color:var(--text)}
+.notification-trigger:hover{background:var(--surface-3)}
+.notification-trigger svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.notification-count{position:absolute;top:-6px;right:-6px;min-width:17px;height:17px}
+.notification-popover{z-index:80}
+.notification-toast{position:fixed;top:18px;right:20px;z-index:120;display:grid;grid-template-columns:30px minmax(0,1fr) 24px;align-items:center;gap:10px;width:min(390px,calc(100vw - 28px));padding:13px 14px;border:1px solid #b7df5c66;border-radius:14px;background:linear-gradient(145deg,#1c2a25,#151e28);box-shadow:0 18px 55px #000b;animation:rise .2s ease}
+.notification-toast-mark{display:grid;place-items:center;width:30px;height:30px;border-radius:10px;background:#d1f36a;color:#17200c;font-weight:900}
+.notification-toast-copy{display:grid;gap:4px;min-width:0}
+.notification-toast-copy strong{font-size:12px;line-height:1.35}
+.notification-toast-copy>span{color:#c4ced9;font-size:10px;line-height:1.4;overflow-wrap:anywhere}
+.notification-toast-close{width:24px;height:24px;border:0;border-radius:7px;background:#ffffff0a;color:#b8c4d0;font-size:18px}
+@media(max-width:900px){
+  .topbar{align-items:flex-start;flex-direction:column}
+  .top-actions{width:100%;justify-content:flex-start}
+  .page-toolbar{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+  .toolbar-actions{width:100%;grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:720px){
+  .layout.sidebar-collapsed .sidebar{display:none}
+  .brand-wordmark{width:185px}
+  .top-actions{display:flex;flex-wrap:wrap;gap:6px}
+  .top-actions>*{max-width:100%}
+  .toolbar-actions{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  .toolbar-actions .button{min-height:42px;padding:9px 8px;font-size:10px}
+  .allocation-log-head{display:none}
+  .allocation-log-item{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:12px}
+  .allocation-log-cell>strong{font-size:11px}
+  .allocation-ticket-cell{grid-column:1/-1}
+  .notification-toast{top:12px;left:12px;right:12px;width:auto}
+}
+@media(max-width:390px){
+  .toolbar-actions{grid-template-columns:minmax(0,1fr)}
+  .toolbar-actions #record-next{grid-column:auto}
+  .utility-icon-button{width:34px;min-width:34px;height:36px}
+}
