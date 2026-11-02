@@ -136,6 +136,7 @@
 
 
 /* Mobile-first workspace redesign: compact navigation, readable cards, less repeated copy. */
+/* Keep mobile navigation above safe-area gestures and browser toolbars. */
 @media (max-width: 720px) {
   body { background: var(--bg); }
   .layout { display:block; min-height:100dvh; }
