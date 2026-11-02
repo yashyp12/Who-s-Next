@@ -595,13 +595,13 @@ function renderReports() {
 
 function bindViewActions() {
   $$('[data-go]').forEach((button) => button.addEventListener('click', () => { activeView = button.dataset.go; renderApp(); }));
-  $('#take-over')?.addEventListener('click', takeOver);
+  document.querySelectorAll('#take-over').forEach((button) => button.addEventListener('click', takeOver));
   $('#attendance-toggle')?.addEventListener('click', recordAttendance);
-  $('#record-next')?.addEventListener('click', () => openAllocationDialog(false));
+  document.querySelectorAll('#record-next').forEach((button) => button.addEventListener('click', () => openAllocationDialog(false)));
   $('#record-ticket')?.addEventListener('click', () => openAllocationDialog(true));
-  $('#add-break')?.addEventListener('click', () => openBreakDialog(false));
+  document.querySelectorAll('#add-break').forEach((button) => button.addEventListener('click', () => openBreakDialog(false)));
   $('#extend-break')?.addEventListener('click', () => openBreakDialog(true));
-  $('#set-shift')?.addEventListener('click', () => openShiftDialog());
+  document.querySelectorAll('#set-shift').forEach((button) => button.addEventListener('click', () => openShiftDialog()));
   $('#new-shift-swap')?.addEventListener('click', openShiftSwapDialog);
   $$('[data-swap-response]').forEach((button) => button.addEventListener('click', () => respondShiftSwap(button.dataset.swapResponse, button.dataset.accept === 'true')));
   $('#new-request-page')?.addEventListener('click', openRequestDialog);
@@ -609,10 +609,10 @@ function bindViewActions() {
   $$('[data-edit-shift]').forEach((button) => button.addEventListener('click', () => openShiftDialog(button.dataset.editShift)));
   $('#export-csv')?.addEventListener('click', exportAllocations);
   $('#admin-add-member')?.addEventListener('click', openAdminAddMemberDialog);
-  $('[data-admin-rotate]').forEach((button) => button.addEventListener('click', () => rotateMemberCode(button.dataset.adminRotate)));
-  $('[data-admin-toggle]').forEach((button) => button.addEventListener('click', () => toggleMemberActive(button.dataset.adminToggle, button.dataset.active === 'true')));
-  $('[data-admin-name]').forEach((button) => button.addEventListener('click', () => renameMember(button.dataset.adminName)));
-  $('[data-admin-shift]').forEach((button) => button.addEventListener('click', () => openAdminShiftDialog(button.dataset.adminShift)));
+  document.querySelectorAll('[data-admin-rotate]').forEach((button) => button.addEventListener('click', () => rotateMemberCode(button.dataset.adminRotate)));
+  document.querySelectorAll('[data-admin-toggle]').forEach((button) => button.addEventListener('click', () => toggleMemberActive(button.dataset.adminToggle, button.dataset.active === 'true')));
+  document.querySelectorAll('[data-admin-name]').forEach((button) => button.addEventListener('click', () => renameMember(button.dataset.adminName)));
+  document.querySelectorAll('[data-admin-shift]').forEach((button) => button.addEventListener('click', () => openAdminShiftDialog(button.dataset.adminShift)));
 }
 
 function openDialog(title, description, fields, submitLabel, onSubmit) {
