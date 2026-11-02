@@ -9,7 +9,7 @@ const migration = await readFile(new URL('../supabase/migrations/202611020009_fi
 
 test('optional admin role controls use a collection selector before forEach', () => {
   assert.match(app, /\$\$\('\[data-admin-role-save\]'\)\.forEach/);
-  assert.doesNotMatch(app, /\$\('\[data-admin-role-save\]'\)\.forEach/);
+  assert.equal(app.split('\n').some((line) => line.trimStart().startsWith("$('[data-admin-role-save]')")), false);
 });
 
 test('workspace refresh trigger safely checks presence fields only through row JSON', () => {
