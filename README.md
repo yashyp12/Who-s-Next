@@ -154,6 +154,7 @@ Do not run these steps against an existing production workspace without a backup
    supabase/migrations/202611020009_fix_workspace_refresh_trigger.sql
    supabase/migrations/202611020010_request_withdrawal_and_takeover_guard.sql
    supabase/migrations/202611020011_atomic_logout_handover.sql
+   supabase/migrations/202611020012_fix_withdrawal_lock_order.sql
    ```
 
 4. Edit `supabase/seed.sql` locally with the real roster and one unique random access code per member. Use codes of at least 16 characters, keep them out of Git, and share each code only with its matching colleague.
