@@ -130,7 +130,7 @@ test('optional request and swap actions use collection selectors and cannot abor
   assert.match(app, /\$\$\('\[data-edit-own-request\]'\)\.forEach/);
   assert.match(app, /\$\$\('\[data-withdraw-request\]'\)\.forEach/);
   assert.match(app, /\$\$\('\[data-swap-response\]'\)\.forEach/);
-  assert.doesNotMatch(app, /\$\('\[(?:data-edit-own-request|data-withdraw-request|data-swap-response)\]'\)\.forEach/);
+  assert.doesNotMatch(app, /(?<!\$)\$\('\[(?:data-edit-own-request|data-withdraw-request|data-swap-response)\]'\)\.forEach/);
 });
 
 test('admin roster loader remains reachable after optional profile controls are bound', () => {
