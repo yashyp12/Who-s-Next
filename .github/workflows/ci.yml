@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'feature/**']
   pull_request:
-    branches: [main, feature/live-allocation-presence-notifications, feature/admin-notifications]
+    branches: [main, feature/live-allocation-presence-notifications, feature/admin-notifications, feature/shift-aware-presence]
 
 permissions:
   contents: read

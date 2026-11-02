@@ -245,4 +245,12 @@
 
 /* Trigger CI against the current stacked base. */
 
-/* Recheck mobile styling against the updated notification base. */
+/* Recheck mobile styling against the updated notification base. */.break-active-card{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:0 0 15px;padding:18px 20px;border:1px solid #d8a04c55;border-radius:16px;background:linear-gradient(115deg,#4b351f88,#1c2631);box-shadow:0 12px 28px #0002}
+.break-active-card>div:first-child{display:grid;gap:5px}
+.break-active-card>div:first-child small{font-size:9px;letter-spacing:1.3px;font-weight:800;color:#efc27f}
+.break-active-card>div:first-child strong{font:800 19px Manrope;color:#fff0d7}
+.break-active-card p{margin:0;color:#d0b58f;font-size:11px}
+.break-countdown-wrap{display:grid;justify-items:end;gap:4px}
+.break-countdown-wrap strong{font:800 clamp(22px,4vw,30px) ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:1px;color:#f5d59f;font-variant-numeric:tabular-nums}
+.break-countdown-wrap small{font-size:8px;letter-spacing:1.2px;color:#c7a87b;font-weight:800}
+@media(max-width:720px){.break-active-card{padding:15px;gap:8px}.break-active-card>div:first-child strong{font-size:16px}.break-active-card p{font-size:10px}.break-countdown-wrap strong{font-size:22px}}

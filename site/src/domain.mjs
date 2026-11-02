@@ -8,7 +8,7 @@ export const SHIFT_PRESETS = {
 export const REQUEST_TYPES = {
   meeting: 'Meeting',
   kt: 'Knowledge transfer',
-  technical: 'Technical issue',
+  technical: 'Troubleshooting',
   rdp: 'RDP issue',
   extended_break: 'Extended break',
   late_login: 'Late login',
@@ -63,7 +63,7 @@ export function getMemberStatus(member, context) {
   const unavailable = (member.requests || []).find((r) => r.status === 'approved' && r.type !== 'leave' && isWithinDateTimeRange(now, r.startAt, r.endAt));
   if (unavailable) {
     const severe = ['technical', 'rdp'].includes(unavailable.type);
-    return { code: unavailable.type, label: REQUEST_TYPES[unavailable.type] || 'Unavailable', tone: severe ? 'danger' : 'warning', returnAt: unavailable.endAt, reason: unavailable.reason || REQUEST_TYPES[unavailable.type] };
+    return { code: unavailable.type, label: ['technical','rdp','meeting'].includes(unavailable.type) ? 'Troubleshooting / Meeting' : (REQUEST_TYPES[unavailable.type] || 'Unavailable'), tone: severe ? 'danger' : 'warning', returnAt: unavailable.endAt, reason: unavailable.reason || REQUEST_TYPES[unavailable.type] };
   }
 
   const activeBreak = (member.breaks || []).find((b) => {
@@ -72,7 +72,13 @@ export function getMemberStatus(member, context) {
     if (b.date === date) return start < end ? currentMinutes >= start && currentMinutes < end : currentMinutes >= start;
     return b.date === previous && start > end && currentMinutes < end;
   });
-  if (activeBreak) return { code: 'break', label: 'On break', tone: 'warning', returnAt: `${activeBreak.date}T${activeBreak.end}:00`, reason: activeBreak.note || 'Scheduled break' };
+  if (activeBreak) {
+    const returnDate = activeBreak.start > activeBreak.end
+      ? new Date(Date.parse(`${activeBreak.date}T00:00:00Z`) + 86400000).toISOString().slice(0,10)
+      : activeBreak.date;
+    const breakLabel = activeBreak.breakType === 'meal' ? 'Meal break' : 'BioBreak';
+    return { code: 'break', label: breakLabel, tone: 'warning', returnAt: `${returnDate}T${activeBreak.end}:00`, reason: breakLabel };
+  }
 
   return { code: 'available', label: 'Available', tone: 'success', returnAt: null, reason: 'Eligible for allocation' };
 }
@@ -83,6 +89,16 @@ export function getEligibleMembers(members, context) {
     .filter(({ member, status }) => member.active !== false && status.code === 'available')
     .map(({ member }) => member)
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
+}
+
+export function getTicketEligibleMembers(members, context) {
+  return members
+    .map((member) => ({ member, status: getMemberStatus(member, context) }))
+    .filter(({ member, status }) => member.active !== false
+      && ['available', 'technical', 'rdp', 'meeting'].includes(status.code))
+    .map(({ member }) => member)
+    .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0)
+      || left.name.localeCompare(right.name));
 }
 
 export function buildRotation(members, lastAllocatedMemberId, context = null) {
@@ -170,3 +186,9 @@ export function formatDuration(minutes) {
   const remainder = value % 60;
   return hours ? `${hours}h ${remainder}m` : `${remainder}m`;
 }
+
+// Keep the status contract explicit for new-email and existing-ticket allocation.
+
+// Presence and allocation policy remains shared between the queue and server-backed flow.
+
+// Active break countdown uses the workspace-local end timestamp.
