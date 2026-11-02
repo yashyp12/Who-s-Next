@@ -784,3 +784,5 @@ async function boot() {
 }
 
 boot();
+
+// Admin controls remain hidden unless the server grants the current member admin role.
