@@ -30,6 +30,9 @@ let toastTimer = null;
 let clockTimer = null;
 let boundaryTimer = null;
 let refreshInProgress = false;
+let refreshQueued = false;
+let realtimeRefreshTimer = null;
+let hourlyReconcileTimer = null;
 let sidebarCollapsed = localStorage.getItem('whos-next-sidebar-collapsed') === 'true';
 let autoCheckInInProgress = false;
 
@@ -160,7 +163,10 @@ async function connectRemote() {
 function setupRealtime() {
   if (!supabase || !workspaceId || realtimeChannel) return;
   realtimeChannel = supabase.channel(`whos-next-${workspaceId}`, { config: { broadcast: { self: false } } })
-    .on('broadcast', { event: 'refresh' }, () => { reloadRemote().catch((error) => toast(error.message || 'Live refresh failed.', true)); })
+    .on('broadcast', { event: 'refresh' }, () => {
+      if (realtimeRefreshTimer) window.clearTimeout(realtimeRefreshTimer);
+      realtimeRefreshTimer = window.setTimeout(() => reloadRemote().catch((error) => toast(error.message || 'Live refresh failed.', true)), 120);
+    })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'member_presence', filter: `workspace_id=eq.${workspaceId}` }, () => { refreshPresence().catch((error) => console.warn('Presence sync failed:', error)); })
     .subscribe();
 }
@@ -197,8 +203,7 @@ function startPresenceTracking() {
     }
   };
   const syncPresence = () => {
-    const nextState = document.visibilityState === 'hidden' || Date.now() - lastPresenceActivity >= 5 * 60 * 1000
-      ? 'away' : 'active';
+    const nextState = Date.now() - lastPresenceActivity >= 5 * 60 * 1000 ? 'away' : 'active';
     if (nextState !== presenceState) {
       heartbeatPresence(nextState).then(refreshPresence).catch((error) => console.warn('Presence update failed:', error));
     } else {
@@ -217,17 +222,22 @@ function startPresenceTracking() {
   presenceRefreshTimer = window.setInterval(() => {
     refreshPresence().catch((error) => console.warn('Presence reconciliation failed:', error));
   }, 20000);
+  hourlyReconcileTimer = window.setInterval(() => {
+    reloadRemote().catch((error) => console.warn('Hourly workspace reconciliation failed:', error));
+  }, 60 * 60 * 1000);
 }
 
 function stopPresenceTracking() {
   if (presenceTimer) window.clearInterval(presenceTimer);
   if (presenceRefreshTimer) window.clearInterval(presenceRefreshTimer);
+  if (hourlyReconcileTimer) window.clearInterval(hourlyReconcileTimer);
   presenceTimer = null;
   presenceRefreshTimer = null;
+  hourlyReconcileTimer = null;
 }
 
 async function reloadRemote() {
-  if (refreshInProgress) return;
+  if (refreshInProgress) { refreshQueued = true; return; }
   refreshInProgress = true;
   try {
     const { error: handoverError } = await supabase.rpc('ensure_shift_assignee');
@@ -240,7 +250,13 @@ async function reloadRemote() {
     state.presence = Array.isArray(presence) ? presence : [];
     await maybeAutoCheckIn();
     renderApp();
-  } finally { refreshInProgress = false; }
+  } finally {
+    refreshInProgress = false;
+    if (refreshQueued) {
+      refreshQueued = false;
+      window.setTimeout(() => reloadRemote().catch((error) => console.warn('Queued workspace reconciliation failed:', error)), 0);
+    }
+  }
 }
 
 function showJoinScreen(message = '') {
@@ -569,7 +585,7 @@ function renderOverview(me, assignee, counts, statuses) {
 
 function renderRequestCard(request) {
   const owner = state.members.find((member) => member.id === request.memberId);
-  const canReview = isCurrentAssignee() && request.status === 'pending' && request.memberId !== currentMemberId;
+  const canReview = (isCurrentAssignee() || (request.type === 'extended_break' && currentIsAdmin)) && request.status === 'pending' && request.memberId !== currentMemberId;
   return `<article class="request-card"><span class="avatar">${initials(owner?.name || '?')}</span><div class="request-content"><strong>${escapeHtml(owner?.name || 'Unknown member')} · ${escapeHtml(REQUEST_TYPES[request.type] || request.type)}</strong><p>${escapeHtml(request.reason || 'No reason provided')} · ${prettyDateTime(request.startAt)} – ${prettyTime(request.endAt)}</p><span class="request-time">Submitted ${prettyDateTime(request.createdAt)} · ${escapeHtml(request.status)}</span>${canReview ? `<div class="request-actions"><button class="button button-primary" data-review="${request.id}" data-decision="approved">Approve</button><button class="button button-danger" data-review="${request.id}" data-decision="rejected">Reject</button></div>` : ''}</div></article>`;
 }
 
