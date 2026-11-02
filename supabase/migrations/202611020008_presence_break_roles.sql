@@ -602,7 +602,8 @@ declare v_table text;
 begin
   foreach v_table in array array[
     'members','shifts','breaks','availability_requests','allocations',
-    'allocation_state','handovers','shift_swap_requests','attendance_events','member_presence'
+    'allocation_state','handovers','shift_swap_requests','attendance_events','member_presence',
+    'workspace_admins','audit_events'
   ] loop
     execute format('drop trigger if exists trg_workspace_refresh on public.%I',v_table);
     execute format(
