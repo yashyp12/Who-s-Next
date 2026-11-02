@@ -531,18 +531,22 @@ begin
   select workspace_id into v_workspace_id from public.member_sessions where auth_user_id=auth.uid();
   if v_workspace_id is null or not public.is_workspace_admin() then raise exception 'Workspace admin access required.'; end if;
   select coalesce(jsonb_agg(jsonb_build_object(
-    'memberId',m.id,'memberName',m.name,
-    'freshEmails',count(a.id) filter(where a.allocation_kind='new_email'),
-    'existingTickets',count(a.id) filter(where a.allocation_kind='existing_ticket'),
-    'total',count(a.id)
-  ) order by m.sort_order),'[]'::jsonb)
+    'memberId',r.member_id,'memberName',r.member_name,
+    'freshEmails',r.fresh_emails,'existingTickets',r.existing_tickets,'total',r.total
+  ) order by r.sort_order),'[]'::jsonb)
   into v_result
-  from public.members m
-  left join public.allocations a
-    on a.workspace_id=m.workspace_id and a.recipient_member_id=m.id
-    and (a.assigned_at at time zone (select timezone from public.workspaces where id=v_workspace_id))::date=p_work_date
-  where m.workspace_id=v_workspace_id and m.active
-  group by m.id,m.name,m.sort_order;
+  from (
+    select m.id as member_id,m.name as member_name,m.sort_order,
+      count(a.id) filter(where a.allocation_kind='new_email') as fresh_emails,
+      count(a.id) filter(where a.allocation_kind='existing_ticket') as existing_tickets,
+      count(a.id) as total
+    from public.members m
+    left join public.allocations a
+      on a.workspace_id=m.workspace_id and a.recipient_member_id=m.id
+      and (a.assigned_at at time zone (select timezone from public.workspaces where id=v_workspace_id))::date=p_work_date
+    where m.workspace_id=v_workspace_id and m.active
+    group by m.id,m.name,m.sort_order
+  ) r;
   return jsonb_build_object('date',p_work_date,'members',v_result);
 end;
 $$;
