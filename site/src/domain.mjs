@@ -73,7 +73,7 @@ export function getMemberStatus(member, context) {
     return b.date === previous && start > end && currentMinutes < end;
   });
   if (activeBreak) {
-    const returnDate = activeBreak.start > activeBreak.end && time >= activeBreak.start
+    const returnDate = activeBreak.start > activeBreak.end
       ? new Date(Date.parse(`${activeBreak.date}T00:00:00Z`) + 86400000).toISOString().slice(0,10)
       : activeBreak.date;
     const breakLabel = activeBreak.breakType === 'meal' ? 'Meal break' : 'BioBreak';
