@@ -10,3 +10,101 @@
 .allocation-row{grid-template-columns:minmax(170px,1.3fr) minmax(165px,1fr) minmax(110px,.8fr) auto}
 .allocation-subject{display:block;color:#d6e0e9!important;font-size:10px!important;line-height:1.4;margin-top:4px;white-space:normal;overflow-wrap:anywhere}
 @media(max-width:720px){.digital-clock{font-size:11px;padding:7px 8px}.allocation-row{grid-template-columns:1fr 1fr}.allocation-row>div{min-width:0;overflow-wrap:anywhere}}
+
+
+/* Mobile usability pass — issue #2 */
+@media (max-width: 720px) {
+  html, body { width: 100%; max-width: 100%; overflow-x: hidden; }
+  .layout { display: block; min-height: 100dvh; }
+  .sidebar {
+    position: sticky; top: 0; z-index: 30;
+    display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px;
+    padding: 10px 14px; width: 100%;
+    border-right: 0; border-bottom: 1px solid var(--line);
+  }
+  .brand { min-width: 0; padding: 0; }
+  .brand-copy { white-space: nowrap; }
+  .nav {
+    display: flex; width: 100%; max-width: 100%; min-width: 0;
+    gap: 6px; overflow-x: auto; overflow-y: hidden;
+    padding: 0 0 2px; overscroll-behavior-x: contain;
+    scrollbar-width: thin; -webkit-overflow-scrolling: touch;
+  }
+  .nav button {
+    flex: 0 0 auto; min-height: 40px; padding: 9px 12px;
+    font-size: 11px; border: 1px solid transparent;
+  }
+  .nav button.active { border-color: #d1f36a35; }
+  .nav-icon { display: inline; }
+  .main { width: 100%; min-width: 0; padding: 20px 14px 32px; }
+  .topbar { align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 22px; }
+  .topbar > div:first-child { min-width: 0; }
+  .top-actions { flex-wrap: wrap; justify-content: flex-start; max-width: 100%; }
+  .top-actions .live-pill { display: flex; }
+  .page-title { overflow-wrap: anywhere; }
+  .greeting-row { align-items: flex-start; flex-wrap: wrap; gap: 8px; }
+  .date-stamp { text-align: left; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+  .stat-card { min-width: 0; padding: 13px; min-height: 96px; }
+  .stat-value { font-size: clamp(20px, 6vw, 25px); }
+  .middle-grid, .bottom-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .panel { min-width: 0; padding: 14px; }
+  .panel-head { align-items: flex-start; flex-wrap: wrap; }
+  .team-panel { padding: 0; }
+  .team-panel .panel-head { padding: 14px; }
+  .table-wrap { width: 100%; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+  .team-table { min-width: 620px; }
+  .team-table th, .team-table td { padding: 10px 12px; }
+  .assignee-card { align-items: flex-start; flex-wrap: wrap; }
+  .assignee-meta { min-width: 0; overflow-wrap: anywhere; }
+  .assignee-actions { width: 100%; flex-wrap: wrap; justify-content: flex-start; }
+  .queue-item { min-width: 0; }
+  .queue-person { min-width: 0; }
+  .queue-tag { flex: 0 0 auto; }
+  .page-toolbar { align-items: flex-start; flex-wrap: wrap; }
+  .toolbar-actions { width: 100%; }
+  .form-grid { grid-template-columns: minmax(0, 1fr); }
+  .field.full { grid-column: auto; }
+  .field input, .field select, .field textarea { min-height: 42px; font-size: 16px; }
+  .button { min-height: 40px; }
+  .dialog { width: min(540px, calc(100vw - 20px)); max-height: calc(100dvh - 24px); overflow-y: auto; }
+  .dialog-body { padding: 4px 16px 18px; }
+  .dialog-footer { flex-wrap: wrap; }
+  .dialog-footer .button { flex: 1 1 auto; }
+  .request-card { min-width: 0; }
+  .request-actions { flex-wrap: wrap; }
+  .schedule-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .allocation-row { grid-template-columns: minmax(0, 1fr); }
+  .digital-clock { max-width: 100%; }
+  .toast { left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); }
+}
+
+@media (max-width: 480px) {
+  .main { padding: 17px 11px 28px; }
+  .sidebar { padding: 9px 11px; }
+  .nav button { min-height: 42px; padding: 9px 10px; }
+  .nav-icon { display: none; }
+  .page-title, .topbar .page-title { font-size: clamp(22px, 7vw, 26px); }
+  .stats { gap: 8px; }
+  .stat-card { padding: 11px; }
+  .stat-head { gap: 6px; font-size: 10px; }
+  .stat-icon { width: 24px; height: 24px; }
+  .panel { padding: 12px; border-radius: 14px; }
+  .team-panel { padding: 0; }
+  .report-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .report-card { min-width: 0; padding: 12px; }
+  .report-card strong { font-size: 19px; overflow-wrap: anywhere; }
+  .digital-clock { font-size: 10px; padding: 7px; }
+  .join-screen { padding: 14px; }
+  .join-card { padding: 20px 17px; }
+}
+
+@media (max-width: 360px) {
+  .main { padding-right: 9px; padding-left: 9px; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stat-card { padding: 9px; }
+  .stat-head { font-size: 9px; }
+  .queue-item { gap: 7px; padding: 8px; }
+  .queue-tag { font-size: 8px; padding: 4px 5px; }
+  .button { padding: 9px 10px; }
+}
