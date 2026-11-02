@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  isWithinTimeWindow, getMemberStatus, getEligibleMembers,
+  isWithinTimeWindow, getMemberStatus, getEligibleMembers, getTicketEligibleMembers,
   buildRotation, nextEligibleMember, recordAllocation,
   validateTimeRange, validateRequestPeriod, formatDuration,
 } from '../site/src/domain.mjs';
@@ -134,4 +134,24 @@ test('break must fit completely inside a scheduled shift', async () => {
   assert.equal(isBreakWithinShift({ memberId: 'm1', date: '2026-11-01', start: '18:00', end: '18:30' }, shifts), false);
   assert.equal(isBreakWithinShift({ memberId: 'm2', date: '2026-11-02', start: '00:30', end: '01:00' }, shifts), true);
   assert.equal(isBreakWithinShift({ memberId: 'm2', date: '2026-11-02', start: '07:00', end: '07:30' }, shifts), false);
+});
+
+
+test('ticket routing permits available and troubleshooting/meeting members but excludes breaks and leave', () => {
+  const members = [
+    member('m1', { sortOrder: 1 }),
+    member('m2', { sortOrder: 2, requests: [{ type: 'technical', status: 'approved', startAt: '2026-11-01T11:00:00+05:30', endAt: '2026-11-01T13:00:00+05:30' }] }),
+    member('m3', { sortOrder: 3, requests: [{ type: 'meeting', status: 'approved', startAt: '2026-11-01T11:00:00+05:30', endAt: '2026-11-01T13:00:00+05:30' }] }),
+    member('m4', { sortOrder: 4, breaks: [{ date: context.date, start: '11:30', end: '12:30', breakType: 'meal' }] }),
+    member('m5', { sortOrder: 5, requests: [{ type: 'leave', status: 'approved', startAt: '2026-11-01T11:00:00+05:30', endAt: '2026-11-01T13:00:00+05:30' }] }),
+    member('m6', { sortOrder: 6, active: false }),
+  ];
+  assert.deepEqual(getTicketEligibleMembers(members, context).map((item) => item.id), ['m1','m2','m3']);
+});
+
+test('typed breaks expose BioBreak and Meal break status labels', () => {
+  const bio = member('bio', { breaks: [{ date: context.date, start: '11:30', end: '12:30', breakType: 'bio' }] });
+  const meal = member('meal', { breaks: [{ date: context.date, start: '11:30', end: '12:30', breakType: 'meal' }] });
+  assert.equal(getMemberStatus(bio, context).label, 'BioBreak');
+  assert.equal(getMemberStatus(meal, context).label, 'Meal break');
 });
