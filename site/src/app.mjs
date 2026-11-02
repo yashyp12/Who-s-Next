@@ -281,6 +281,16 @@ function startWorkspaceClock() {
   const update = () => {
     const clock = $('#workspace-clock');
     if (clock) clock.textContent = new Intl.DateTimeFormat(undefined, { timeZone: state?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date());
+    const countdown = $('#break-countdown');
+    if (countdown) {
+      const member = domainMembers().find((entry) => entry.id === currentMemberId);
+      const status = member ? getMemberStatus(member, contextNow()) : null;
+      if (status?.code === 'break' && status.returnAt) {
+        const end = new Date(workspaceInputToIso(status.returnAt.slice(0,16))).getTime();
+        const seconds = Math.max(0, Math.floor((end - Date.now()) / 1000));
+        countdown.textContent = `${String(Math.floor(seconds / 3600)).padStart(2,'0')}:${String(Math.floor((seconds % 3600) / 60)).padStart(2,'0')}:${String(seconds % 60).padStart(2,'0')}`;
+      } else countdown.textContent = '00:00:00';
+    }
   };
   update();
   if (clockTimer) clearInterval(clockTimer);
@@ -443,7 +453,7 @@ function renderAllocation(me, assignee) {
   const queue = queueMembers();
   const today = state.allocations.filter((item) => localDate(new Date(item.assignedAt)) === localDate());
   const myStatus = getMemberStatus(domainMembers().find((member) => member.id === currentMemberId), contextNow());
-  return `<div class="page-toolbar"><div><div class="panel-title">Round-robin queue</div><div class="panel-subtitle">Unavailable colleagues automatically return to the queue when their break or approved time window ends.</div></div><div class="toolbar-actions"><button class="button button-secondary" id="take-over" ${isCurrentAssignee() ? 'disabled' : ''}>Take over responsibility</button><button class="button button-secondary" id="record-ticket" ${isCurrentAssignee() ? '' : 'disabled'}>Route existing ticket</button><button class="button button-primary" id="record-next" ${queue.length && isCurrentAssignee() ? '' : 'disabled'}>Record new email →</button></div></div>${myStatus.code === 'break' ? `<div class="notice break-active-notice">You are on ${escapeHtml(myStatus.reason)} until ${prettyTime(myStatus.returnAt)}. New email allocation is paused during your break.</div>` : ''}
+  return `<div class="page-toolbar"><div><div class="panel-title">Round-robin queue</div><div class="panel-subtitle">Unavailable colleagues automatically return to the queue when their break or approved time window ends.</div></div><div class="toolbar-actions"><button class="button button-secondary" id="take-over" ${isCurrentAssignee() ? 'disabled' : ''}>Take over responsibility</button><button class="button button-secondary" id="record-ticket" ${isCurrentAssignee() ? '' : 'disabled'}>Route existing ticket</button><button class="button button-primary" id="record-next" ${queue.length && isCurrentAssignee() ? '' : 'disabled'}>Record new email →</button></div></div>${myStatus.code === 'break' ? `<div class="notice break-active-notice">You are on ${escapeHtml(myStatus.reason)} · returns at ${prettyTime(myStatus.returnAt)} · <strong id="break-countdown">--:--:--</strong> remaining. New email allocation is paused.</div>` : ''}
     <div class="notice">Assign the email in Outlook first, then record it here. WHO'S next captures the recipient, assigner, optional subject/reference and exact server timestamp. The next colleague becomes first in line immediately after the record succeeds.</div>
     <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Current responsibility</div><div class="panel-subtitle">Automatically follows the active shift when the current owner goes off shift or becomes unavailable</div></div></div><div class="assignee-card"><span class="avatar">${assignee ? initials(assignee.name) : '?'}</span><div class="assignee-meta"><strong>${escapeHtml(assignee?.name || 'Not assigned')}</strong><small>${isCurrentAssignee() ? 'You are currently responsible for allocation' : 'Current allocation owner'}</small></div></div><div class="muted-copy">Your profile remains signed in. Only the shared allocation responsibility changes at shift handover.</div></section>
     <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Next eligible sequence</div><div class="panel-subtitle">${queue.length} people ready · last allocation to ${escapeHtml(state.members.find((m) => m.id === state.lastAllocatedMemberId)?.name || 'nobody yet')}</div></div></div><div class="queue-list">${queue.length ? queue.map((member, index) => `<div class="queue-item"><span class="queue-number">${String(index + 1).padStart(2, '0')}</span><span class="avatar">${initials(member.name)}</span><div class="queue-person"><strong>${escapeHtml(member.name)}</strong><small>${escapeHtml(SHIFT_PRESETS[member.shiftKey || member.shift?.key]?.label || 'Scheduled shift')}</small></div><span class="queue-tag">ELIGIBLE</span></div>`).join('') : '<div class="empty-state">No eligible employees at the moment.</div>'}</div></section>
