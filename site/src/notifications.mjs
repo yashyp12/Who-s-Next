@@ -147,6 +147,7 @@ function renderList() {
         if (error) throw error;
         item.readAt = new Date().toISOString();
         notifications = notifications.filter((entry) => entry.id !== notificationId);
+        if (!notifications.length) isOpen = false;
         renderList();
       } catch (error) {
         console.error('Unable to mark notification as read:', error);
