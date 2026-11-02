@@ -50,6 +50,23 @@ const statusFor = (member) => getMemberStatus(member, { now: new Date().toISOStr
 const prettyDate = (date) => new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${date}T12:00:00Z`));
 const prettyTime = (value) => { if (!value) return '—'; const date = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(value) ? new Date(workspaceInputToIso(value.slice(0, 16))) : new Date(value); return new Intl.DateTimeFormat(undefined, { timeZone: state?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone, hour: '2-digit', minute: '2-digit' }).format(date); };
 const prettyDateTime = (value) => value ? new Intl.DateTimeFormat(undefined, { timeZone: state?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone, day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date(value)) : '—';
+
+function formatWorkspaceClock(now = new Date()) {
+  const localTimeText = () => now.toLocaleTimeString(undefined, {
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  });
+  const timezone = typeof state?.timezone === 'string' ? state.timezone.trim() : '';
+  if (!timezone) return localTimeText();
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      timeZone: timezone, hour: '2-digit', minute: '2-digit',
+      second: '2-digit', hour12: false,
+    }).format(now);
+  } catch (error) {
+    console.warn('Invalid workspace timezone; displaying local time instead:', error);
+    return localTimeText();
+  }
+}
 function workspaceInputToIso(value) {
   if (!value || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) throw new Error('Enter a valid date and time.');
   const [datePart, timePart] = value.split('T');
@@ -365,7 +382,7 @@ function renderApp() {
         </div>
       </aside>
       <main class="main">
-        <header class="topbar"><div class="topbar-title-wrap"><div><div class="eyebrow">${activeView === 'overview' ? 'Live operations' : 'Team workspace'}</div><h1 class="page-title">${viewTitle(activeView)}</h1></div></div><span id="workspace-clock" class="digital-clock" aria-label="Workspace time">--:--:--</span><div class="top-actions"><button class="button button-secondary button-small" id="new-request-top">＋ New request</button><button class="button button-secondary button-small" id="refresh-workspace">↻ Refresh</button><div class="notification-center" aria-label="Notifications"></div>${remoteMode ? '<span class="live-pill"><i class="live-dot"></i> Live sync</span>' : '<span class="demo-pill">● Local preview</span>'}<button class="mobile-profile-toggle" id="profile-menu-mobile-toggle" type="button" aria-label="Account menu" aria-expanded="${profileMenuOpen}">${initials(me.name)}</button>${profileMenuOpen ? '<div class="mobile-profile-popover"><button type="button" id="profile-sign-out-mobile">↪ Sign out</button></div>' : ''}</div></header>
+        <header class="topbar"><div class="topbar-title-wrap"><div><div class="eyebrow">${activeView === 'overview' ? 'Live operations' : 'Team workspace'}</div><h1 class="page-title">${viewTitle(activeView)}</h1></div></div><span id="workspace-clock" class="digital-clock" aria-label="Workspace time">${escapeHtml(formatWorkspaceClock())}</span><div class="top-actions"><button class="button button-secondary button-small" id="new-request-top">＋ New request</button><button class="button button-secondary button-small" id="refresh-workspace">↻ Refresh</button><div class="notification-center" aria-label="Notifications"></div>${remoteMode ? '<span class="live-pill"><i class="live-dot"></i> Live sync</span>' : '<span class="demo-pill">● Local preview</span>'}<button class="mobile-profile-toggle" id="profile-menu-mobile-toggle" type="button" aria-label="Account menu" aria-expanded="${profileMenuOpen}">${initials(me.name)}</button>${profileMenuOpen ? '<div class="mobile-profile-popover"><button type="button" id="profile-sign-out-mobile">↪ Sign out</button></div>' : ''}</div></header>
         <section class="section-view ${activeView === 'overview' ? 'active' : ''}" id="view-overview">${renderOverview(me, assignee, counts, statuses)}</section>
         <section class="section-view ${activeView === 'schedule' ? 'active' : ''}" id="view-schedule">${renderSchedule(me)}</section>
         <section class="section-view ${activeView === 'requests' ? 'active' : ''}" id="view-requests">${renderRequests(me)}</section>
@@ -402,7 +419,7 @@ function startWorkspaceClock() {
     if (clock) {
       // Paint a local-time fallback first so a bad workspace timezone can
       // never leave the visible clock stuck on its placeholder.
-      clock.textContent = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+      clock.textContent = formatWorkspaceClock(now);
       const workspaceTimezone = typeof state?.timezone === 'string' ? state.timezone.trim() : '';
       if (workspaceTimezone) {
         try {
@@ -542,14 +559,20 @@ async function signOut() {
     const latestAttendance = latestAttendanceForCurrentMember();
     if (latestAttendance?.eventType === 'check_in') {
       const { error: checkoutError } = await supabase.rpc('record_attendance', { p_event_type: 'check_out' });
-      if (checkoutError) throw checkoutError;
+      if (checkoutError) console.warn('Attendance checkout failed; continuing with the mandatory allocation handover:', checkoutError);
     }
     // set_member_offline atomically removes presence and reconciles allocation
     // ownership in the same database transaction (migration 011).
     const { data: offlineResult, error: offlineError } = await supabase.rpc('set_member_offline');
     if (offlineError) throw offlineError;
-    if (offlineResult?.handover?.changed === false && offlineResult?.handover?.current_assignee_id === currentMemberId) {
-      throw new Error('Logout did not release your allocation responsibility. Please retry or contact an SME.');
+    const handover = offlineResult?.handover;
+    if (!handover || !Object.prototype.hasOwnProperty.call(handover, 'current_assignee_id')) {
+      await heartbeatPresence('active').catch((restoreError) => console.error('Could not restore presence after an incomplete logout:', restoreError));
+      throw new Error('Automatic logout handover is not installed in the database yet. Apply migration 011, then retry.');
+    }
+    if (handover.current_assignee_id === currentMemberId) {
+      await heartbeatPresence('active').catch((restoreError) => console.error('Could not restore presence after a failed handover:', restoreError));
+      throw new Error('Logout was stopped because allocation responsibility is still assigned to you. Please retry or contact an SME.');
     }
     stopPresenceTracking();
     const { error } = await supabase.auth.signOut();
