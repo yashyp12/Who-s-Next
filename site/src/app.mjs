@@ -197,7 +197,8 @@ async function joinWorkspace(event) {
     if (memberError) throw memberError;
     currentIsAdmin = Boolean(me?.is_admin);
     setupRealtime();
-    await reloadRemote();  } catch (error) {
+    await reloadRemote();
+  } catch (error) {
     toast(error.message || 'Unable to join workspace.', true);
     button.disabled = false; button.innerHTML = 'Open workspace <span>→</span>';
   }
@@ -396,7 +397,8 @@ function renderOverview(me, assignee, counts, statuses) {
   const pending = state.requests.filter((request) => request.status === 'pending').slice(0, 3);
   const allocations = state.allocations.slice(0, 5);
   const myStatus = statuses.find(({ member }) => member.id === currentMemberId)?.status;
-  const hour = Number(localTime().slice(0, 2));  return `
+  const hour = Number(localTime().slice(0, 2));
+  return `
     <div class="greeting-row"><div><div class="eyebrow">${prettyDate(localDate())} · ${localTime()} local time</div><h2 style="font:800 19px Manrope;margin:8px 0 0">Good ${hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'}, ${escapeHtml(me.name.split(' ')[0])}.</h2><p>Here’s the current pulse of your team. Keep the next handover clear.</p></div><div class="date-stamp"><strong>${escapeHtml(state.workspaceName)}</strong>${statuses.length} rostered team members</div></div>
     <div class="stats">${statCard('AVAILABLE NOW', counts.available, 'Eligible for the next allocation', '✓')}${statCard('ON BREAK / BUSY', counts.break, 'Scheduled or approved unavailability', '◷')}${statCard('NEEDS REVIEW', counts.pending, 'Pending team requests', '↗')}${statCard('ALLOCATED TODAY', counts.allocations, 'Assignments recorded in WHO’S next', '⇄')}</div>
     <div class="middle-grid">
@@ -595,7 +597,8 @@ function bindViewActions() {
   $$('[data-go]').forEach((button) => button.addEventListener('click', () => { activeView = button.dataset.go; renderApp(); }));
   document.querySelectorAll('#take-over').forEach((button) => button.addEventListener('click', takeOver));
   $('#attendance-toggle')?.addEventListener('click', recordAttendance);
-  document.querySelectorAll('#record-next').forEach((button) => button.addEventListener('click', () => openAllocationDialog(false)));  $('#record-ticket')?.addEventListener('click', () => openAllocationDialog(true));
+  document.querySelectorAll('#record-next').forEach((button) => button.addEventListener('click', () => openAllocationDialog(false)));
+  $('#record-ticket')?.addEventListener('click', () => openAllocationDialog(true));
   document.querySelectorAll('#add-break').forEach((button) => button.addEventListener('click', () => openBreakDialog(false)));
   $('#extend-break')?.addEventListener('click', () => openBreakDialog(true));
   document.querySelectorAll('#set-shift').forEach((button) => button.addEventListener('click', () => openShiftDialog()));
@@ -794,7 +797,8 @@ function exportAllocations() {
 
 function toast(message, error = false) {
   let element = $('.toast'); element?.remove();
-  element = document.createElement('div'); element.className = `toast${error ? ' error' : ''}`; element.textContent = message;  document.body.append(element); clearTimeout(toastTimer); toastTimer = setTimeout(() => element.remove(), 3500);
+  element = document.createElement('div'); element.className = `toast${error ? ' error' : ''}`; element.textContent = message;
+  document.body.append(element); clearTimeout(toastTimer); toastTimer = setTimeout(() => element.remove(), 3500);
 }
 
 async function boot() {
