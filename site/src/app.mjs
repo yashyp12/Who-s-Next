@@ -15,6 +15,9 @@ let remoteMode = false;
 let state = null;
 let activeView = 'allocation';
 let currentMemberId = null;
+let currentIsAdmin = false;
+let adminRoster = [];
+let adminRosterLoaded = false;
 let workspaceId = null;
 let realtimeChannel = null;
 let toastTimer = null;
@@ -137,7 +140,7 @@ async function connectRemote() {
   const { data: me, error } = await supabase.rpc('get_my_member');
   if (error) throw error;
   if (me?.member_id) {
-    currentMemberId = me.member_id; workspaceId = me.workspace_id; setupRealtime();
+    currentMemberId = me.member_id; currentIsAdmin = Boolean(me.is_admin); workspaceId = me.workspace_id; setupRealtime();
     await reloadRemote();
     return;
   }
@@ -241,7 +244,7 @@ function renderApp() {
       <aside class="sidebar">
         <div><div class="brand"><span class="brand-mark">W</span><div class="brand-copy">WHO'S <span>next</span></div></div><div class="workspace-tag">${escapeHtml(state.workspaceName)}</div></div>
         <div><div class="nav-label">Workspace</div><nav class="nav" aria-label="Main navigation">
-          ${navButton('allocation','⇄','Allocate')}${navButton('overview','⌂','Team overview')}${navButton('schedule','▦','My profile')}${navButton('requests','↗','Requests',counts.pending)}${navButton('reports','▤','Reports')}
+          ${navButton('allocation','⇄','Allocate')}${navButton('overview','⌂','Team overview')}${navButton('schedule','▦','My profile')}${navButton('requests','↗','Requests',counts.pending)}${navButton('reports','▤','Reports')}${currentIsAdmin ? navButton('admin','⚙','Admin') : ''}
         </nav></div>
         <div class="sidebar-bottom">
           ${remoteMode ? '<div class="demo-note" style="border-color:#355944;background:#183327;color:#a6d9b5">Live team workspace<br/>Changes sync across browsers.</div>' : '<div class="demo-note">Preview mode<br/>Sample team data is stored only in this browser. Connect Supabase for shared live data.</div>'}
@@ -255,6 +258,7 @@ function renderApp() {
         <section class="section-view ${activeView === 'requests' ? 'active' : ''}" id="view-requests">${renderRequests(me)}</section>
         <section class="section-view ${activeView === 'allocation' ? 'active' : ''}" id="view-allocation">${renderAllocation(me, assignee)}</section>
         <section class="section-view ${activeView === 'reports' ? 'active' : ''}" id="view-reports">${renderReports()}</section>
+        ${currentIsAdmin ? `<section class="section-view ${activeView === 'admin' ? 'active' : ''}" id="view-admin">${renderAdmin()}</section>` : ''}
       </main>
     </div>`;
   if (remoteMode) initializeNotificationCenter({ supabase, memberId: currentMemberId });
@@ -263,6 +267,7 @@ function renderApp() {
   $('#refresh-workspace')?.addEventListener('click', async () => { try { if (remoteMode) await reloadRemote(); else renderApp(); toast('Workspace refreshed.'); } catch (error) { toast(error.message || 'Refresh failed.', true); } });
   $('#demo-profile')?.addEventListener('change', (event) => { currentMemberId = event.target.value; localStorage.setItem(PROFILE_KEY, currentMemberId); renderApp(); });
   bindViewActions();
+  if (currentIsAdmin && activeView === 'admin' && remoteMode && !adminRosterLoaded) loadAdminRoster();
   startWorkspaceClock();
   scheduleOperationalRefresh();
 }
@@ -330,7 +335,7 @@ function navButton(view, icon, label, badge = 0) {
   return `<button type="button" data-view="${view}" class="${activeView === view ? 'active' : ''}"><span class="nav-icon">${icon}</span>${label}${badge ? `<span style="margin-left:auto;background:#d1f36a;color:#1a220e;border-radius:99px;padding:2px 6px;font-size:9px">${badge}</span>` : ''}</button>`;
 }
 function viewTitle(view) {
-  return ({ overview: 'Know who’s <em>next.</em>', schedule: 'Your <em>schedule.</em>', requests: 'Requests & <em>approvals.</em>', allocation: 'Fair work, <em>in order.</em>', reports: 'The shift, <em>at a glance.</em>' })[view] || 'WHO’S next';
+  return ({ overview: 'Know who’s <em>next.</em>', schedule: 'Your <em>schedule.</em>', requests: 'Requests & <em>approvals.</em>', allocation: 'Fair work, <em>in order.</em>', reports: 'The shift, <em>at a glance.</em>', admin: 'Workspace <em>admin.</em>' })[view] || 'WHO’S next';
 }
 function statCard(label, value, sub, icon) {
   return `<article class="stat-card"><div class="stat-head"><span>${label}</span><span class="stat-icon">${icon}</span></div><div class="stat-value">${value}</div><div class="stat-sub">${sub}</div></article>`;
@@ -438,6 +443,108 @@ function renderAllocationTimelineItem(item) {
   return `<div class="schedule-row allocation-row"><div><strong>${escapeHtml(recipient)}</strong><small style="display:block">Assigned by ${escapeHtml(assigner)}</small>${item.emailSubject ? `<small class="allocation-subject">${escapeHtml(item.emailSubject)}</small>` : ''}</div><div>${prettyDateTime(item.assignedAt)}</div><div>${escapeHtml(item.reference || 'No reference')}</div><div><span class="status success">Assigned</span></div></div>`;
 }
 
+
+async function loadAdminRoster() {
+  try {
+    const { data, error } = await supabase.rpc('admin_list_members');
+    if (error) throw error;
+    adminRoster = Array.isArray(data) ? data : [];
+    adminRosterLoaded = true;
+    renderApp();
+  } catch (error) { toast(error.message || 'Unable to load admin roster.', true); }
+}
+
+function renderAdmin() {
+  return `<div class="page-toolbar"><div><div class="panel-title">Team administration</div><div class="panel-subtitle">Manage member profiles, access codes and shift schedules. Admin permissions are checked in Supabase.</div></div><button class="button button-primary" id="admin-add-member">＋ Add member</button></div>
+    <div class="notice">Access codes are shown only once when created or rotated. Share each code privately with its owner. Never paste access codes into team chat or source control.</div>
+    <section class="panel"><div class="panel-head"><div><div class="panel-title">Team roster</div><div class="panel-subtitle">${adminRoster.length} member profile(s)</div></div></div>
+      <div class="schedule-list">${adminRoster.length ? adminRoster.map((member) => {
+        const shift = state.shifts.find((item) => item.memberId === member.id && item.date === localDate()) || null;
+        return `<article class="admin-member-row"><div class="admin-member-main"><span class="avatar">${initials(member.name)}</span><div><strong>${escapeHtml(member.name)}</strong><small>${member.active ? 'Active member' : 'Deactivated'} · ${shift ? `${shift.start}–${shift.end}` : 'No shift today'}</small></div></div><div class="admin-member-actions"><button class="button button-secondary button-small" data-admin-shift="${member.id}">Shift</button><button class="button button-secondary button-small" data-admin-name="${member.id}">Rename</button><button class="button button-secondary button-small" data-admin-rotate="${member.id}">New code</button><button class="button button-${member.active ? 'danger' : 'secondary'} button-small" data-admin-toggle="${member.id}" data-active="${member.active}">${member.active ? 'Deactivate' : 'Activate'}</button></div></article>`;
+      }).join('') : '<div class="empty-state">No members found. Add the first team member to get started.</div>'}</div>
+    </section>`;
+}
+
+function showOneTimeAccessCode(memberName, code) {
+  window.setTimeout(() => {
+    window.prompt(`Copy the new private access code for ${memberName}. This code will not be shown again.`, code);
+  }, 80);
+}
+
+function openAdminAddMemberDialog() {
+  openDialog('Add a team member', 'A unique private access code will be generated and shown once after the member is created.', '<div class="field"><label for="admin-member-name">Full name</label><input id="admin-member-name" name="name" maxlength="80" required placeholder="e.g. Ananya Sharma" /></div>', 'Create member', async (form) => {
+    const { data, error } = await supabase.rpc('admin_create_member', { p_name: form.get('name').trim() });
+    if (error) throw error;
+    adminRosterLoaded = false;
+    showOneTimeAccessCode(data.name, data.access_code);
+    await reloadRemote();
+    toast(`Created ${data.name}. Save the access code securely.`);
+  });
+}
+
+async function rotateMemberCode(memberId) {
+  const member = adminRoster.find((item) => item.id === memberId);
+  if (!member || !window.confirm(`Rotate the private access code for ${member.name}? Their existing sessions will be signed out.`)) return;
+  try {
+    const { data, error } = await supabase.rpc('admin_rotate_member_access_code', { p_member_id: memberId });
+    if (error) throw error;
+    showOneTimeAccessCode(data.name, data.access_code);
+    adminRosterLoaded = false;
+    await loadAdminRoster();
+    toast('Access code rotated. Share the new code privately.');
+  } catch (error) { toast(error.message || 'Unable to rotate access code.', true); }
+}
+
+async function toggleMemberActive(memberId, active) {
+  const member = adminRoster.find((item) => item.id === memberId);
+  if (!member) return;
+  const nextActive = !active;
+  if (!window.confirm(`${nextActive ? 'Reactivate' : 'Deactivate'} ${member.name}?`)) return;
+  try {
+    const { error } = await supabase.rpc('admin_update_member', { p_member_id: memberId, p_name: member.name, p_active: nextActive });
+    if (error) throw error;
+    adminRosterLoaded = false;
+    await reloadRemote();
+    await loadAdminRoster();
+    toast(`${member.name} ${nextActive ? 'activated' : 'deactivated'}.`);
+  } catch (error) { toast(error.message || 'Unable to update member.', true); }
+}
+
+async function renameMember(memberId) {
+  const member = adminRoster.find((item) => item.id === memberId);
+  if (!member) return;
+  const name = window.prompt('Update member name:', member.name);
+  if (name === null || !name.trim() || name.trim() === member.name) return;
+  try {
+    const { error } = await supabase.rpc('admin_update_member', { p_member_id: memberId, p_name: name.trim(), p_active: member.active });
+    if (error) throw error;
+    adminRosterLoaded = false;
+    await reloadRemote();
+    await loadAdminRoster();
+    toast('Member name updated.');
+  } catch (error) { toast(error.message || 'Unable to rename member.', true); }
+}
+
+function openAdminShiftDialog(memberId) {
+  const member = adminRoster.find((item) => item.id === memberId);
+  if (!member) return;
+  const existing = state.shifts.find((item) => item.memberId === memberId && item.date === localDate());
+  const date = existing?.date || localDate();
+  const key = existing?.key || 'night';
+  const preset = SHIFT_PRESETS[key] || { start: existing?.start || '09:00', end: existing?.end || '18:00' };
+  const presets = Object.entries(SHIFT_PRESETS).map(([value,item]) => `<option value="${value}" ${value===key?'selected':''}>${escapeHtml(item.label)}</option>`).join('');
+  openDialog(`Set shift · ${member.name}`, 'Admin-managed shift assignment for the selected member.', `<div class="form-grid"><div class="field"><label for="admin-shift-date">Work date</label><input id="admin-shift-date" name="date" type="date" required value="${date}" /></div><div class="field"><label for="admin-shift-preset">Shift pattern</label><select name="key" id="admin-shift-preset">${presets}<option value="custom" ${key==='custom'?'selected':''}>Custom</option></select></div><div class="field"><label for="admin-shift-start">Start</label><input id="admin-shift-start" name="start" type="time" required value="${existing?.start || preset.start}" /></div><div class="field"><label for="admin-shift-end">End</label><input id="admin-shift-end" name="end" type="time" required value="${existing?.end || preset.end}" /></div></div>`, 'Save shift', async (form) => {
+    const { error } = await supabase.rpc('admin_upsert_shift', { p_member_id: memberId, p_work_date: form.get('date'), p_shift_key: form.get('key'), p_start: form.get('start'), p_end: form.get('end') });
+    if (error) throw error;
+    await reloadRemote();
+    toast(`Shift updated for ${member.name}.`);
+  });
+  $('#admin-shift-preset')?.addEventListener('change', (event) => {
+    const preset = SHIFT_PRESETS[event.target.value];
+    if (preset) { $('#admin-shift-start').value = preset.start; $('#admin-shift-end').value = preset.end; }
+  });
+}
+
 function renderReports() {
   const allocations = state.allocations;
   const allMembers = state.members;
@@ -470,6 +577,11 @@ function bindViewActions() {
   $$('[data-review]').forEach((button) => button.addEventListener('click', () => reviewRequest(button.dataset.review, button.dataset.decision)));
   $$('[data-edit-shift]').forEach((button) => button.addEventListener('click', () => openShiftDialog(button.dataset.editShift)));
   $('#export-csv')?.addEventListener('click', exportAllocations);
+  $('#admin-add-member')?.addEventListener('click', openAdminAddMemberDialog);
+  $$('[data-admin-rotate]').forEach((button) => button.addEventListener('click', () => rotateMemberCode(button.dataset.adminRotate)));
+  $$('[data-admin-toggle]').forEach((button) => button.addEventListener('click', () => toggleMemberActive(button.dataset.adminToggle, button.dataset.active === 'true')));
+  $$('[data-admin-name]').forEach((button) => button.addEventListener('click', () => renameMember(button.dataset.adminName)));
+  $$('[data-admin-shift]').forEach((button) => button.addEventListener('click', () => openAdminShiftDialog(button.dataset.adminShift)));
 }
 
 function openDialog(title, description, fields, submitLabel, onSubmit) {
