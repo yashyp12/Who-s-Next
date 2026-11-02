@@ -788,3 +788,5 @@ boot();
 // Admin controls remain hidden unless the server grants the current member admin role.
 
 // The admin page is rendered only for members with a database-backed admin grant.
+
+// Admin CI target includes the shift-aware migration dependency.
