@@ -168,7 +168,6 @@ function setupRealtime() {
       if (realtimeRefreshTimer) window.clearTimeout(realtimeRefreshTimer);
       realtimeRefreshTimer = window.setTimeout(() => reloadRemote().catch((error) => toast(error.message || 'Live refresh failed.', true)), 120);
     })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'member_presence', filter: `workspace_id=eq.${workspaceId}` }, () => { refreshPresence().catch((error) => console.warn('Presence sync failed:', error)); })
     .subscribe();
 }
 
