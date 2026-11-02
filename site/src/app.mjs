@@ -626,14 +626,15 @@ async function loadAdminRoster() {
 }
 
 function renderAdmin() {
-  return `<div class="page-toolbar"><div><div class="panel-title">Team administration</div><div class="panel-subtitle">Manage member profiles, access codes and shift schedules. Admin permissions are checked in Supabase.</div></div><button class="button button-primary" id="admin-add-member">＋ Add member</button></div>
-    <div class="notice">Access codes are shown only once when created or rotated. Share each code privately with its owner. Never paste access codes into team chat or source control.</div>
-    <section class="panel"><div class="panel-head"><div><div class="panel-title">Team roster</div><div class="panel-subtitle">${adminRoster.length} member profile(s)</div></div></div>
+  return `<div class="page-toolbar"><div><div class="panel-title">Team administration</div><div class="panel-subtitle">Super Admin and SME have the same workspace permissions.</div></div><button class="button button-primary" id="admin-add-member">＋ Add member</button></div>
+    <section class="panel"><div class="panel-head"><div><div class="panel-title">Team roster & access</div><div class="panel-subtitle">${adminRoster.length} member profile(s)</div></div></div>
       <div class="schedule-list">${adminRoster.length ? adminRoster.map((member) => {
         const shift = state.shifts.find((item) => item.memberId === member.id && item.date === localDate()) || null;
-        return `<article class="admin-member-row"><div class="admin-member-main"><span class="avatar">${initials(member.name)}</span><div><strong>${escapeHtml(member.name)}</strong><small>${member.active ? 'Active member' : 'Deactivated'} · ${shift ? `${shift.start}–${shift.end}` : 'No shift today'}</small></div></div><div class="admin-member-actions"><button class="button button-secondary button-small" data-admin-shift="${member.id}">Shift</button><button class="button button-secondary button-small" data-admin-name="${member.id}">Rename</button><button class="button button-secondary button-small" data-admin-rotate="${member.id}">New code</button><button class="button button-${member.active ? 'danger' : 'secondary'} button-small" data-admin-toggle="${member.id}" data-active="${member.active}">${member.active ? 'Deactivate' : 'Activate'}</button></div></article>`;
+        const role = member.adminRole || 'none';
+        return `<article class="admin-member-row"><div class="admin-member-main"><span class="avatar">${initials(member.name)}</span><div><strong>${escapeHtml(member.name)}</strong><small>${member.active ? 'Active member' : 'Deactivated'} · ${shift ? `${shift.start}–${shift.end}` : 'No shift today'} · ${role === 'super_admin' ? 'Super Admin' : role === 'sme' ? 'SME' : 'Team member'}</small></div></div><div class="admin-member-actions"><select class="admin-role-select" id="admin-role-${member.id}" aria-label="Access role for ${escapeAttr(member.name)}"><option value="none" ${role === 'none' ? 'selected' : ''}>Member</option><option value="sme" ${role === 'sme' ? 'selected' : ''}>SME</option><option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>Super Admin</option></select><button class="button button-secondary button-small" data-admin-role-save="${member.id}">Save role</button><button class="button button-secondary button-small" data-admin-shift="${member.id}">Shift</button><button class="button button-secondary button-small" data-admin-name="${member.id}">Rename</button><button class="button button-secondary button-small" data-admin-rotate="${member.id}">New code</button><button class="button button-${member.active ? 'danger' : 'secondary'} button-small" data-admin-toggle="${member.id}" data-active="${member.active}">${member.active ? 'Deactivate' : 'Activate'}</button></div></article>`;
       }).join('') : '<div class="empty-state">No members found. Add the first team member to get started.</div>'}</div>
-    </section>`;
+    </section>
+    <section class="panel admin-report-panel"><div class="panel-head"><div><div class="panel-title">Shift allocation report</div><div class="panel-subtitle">Fresh emails and existing tickets assigned per member.</div></div></div><div class="toolbar-actions"><div class="field"><label for="admin-report-date">Workspace date</label><input id="admin-report-date" type="date" value="${localDate()}"/></div><button class="button button-secondary" id="admin-run-report">Load report</button></div><div id="admin-shift-report" class="empty-state">Choose a date to view the allocation summary.</div></section>`;
 }
 
 function showOneTimeAccessCode(memberName, code) {
@@ -664,6 +665,39 @@ async function rotateMemberCode(memberId) {
     await loadAdminRoster();
     toast('Access code rotated. Share the new code privately.');
   } catch (error) { toast(error.message || 'Unable to rotate access code.', true); }
+}
+
+async function saveAdminRole(memberId) {
+  const select = document.querySelector(`#admin-role-${CSS.escape(memberId)}`);
+  if (!select) return;
+  const role = select.value;
+  const member = adminRoster.find((item) => item.id === memberId);
+  if (!member) return;
+  const label = role === 'super_admin' ? 'Super Admin' : role === 'sme' ? 'SME' : 'regular member';
+  if (!window.confirm(`Set ${member.name} as ${label}? Super Admin and SME have identical workspace permissions.`)) return;
+  try {
+    const { error } = await supabase.rpc('admin_set_member_role', { p_member_id: memberId, p_role: role });
+    if (error) throw error;
+    await loadAdminRoster();
+    toast(`${member.name} access updated.`);
+  } catch (error) { toast(error.message || 'Unable to update admin access.', true); }
+}
+
+async function runAdminShiftReport() {
+  const date = $('#admin-report-date')?.value;
+  if (!date) return toast('Choose a report date.', true);
+  const target = $('#admin-shift-report');
+  if (target) target.textContent = 'Loading report…';
+  try {
+    const { data, error } = await supabase.rpc('admin_shift_allocation_report', { p_work_date: date });
+    if (error) throw error;
+    const rows = data?.members || [];
+    if (!target) return;
+    target.className = 'admin-report-table';
+    target.innerHTML = rows.length ? `<div class="table-wrap"><table class="team-table"><thead><tr><th>Team member</th><th>Fresh emails</th><th>Existing tickets</th><th>Total</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${escapeHtml(row.memberName)}</td><td>${Number(row.freshEmails) || 0}</td><td>${Number(row.existingTickets) || 0}</td><td><strong>${Number(row.total) || 0}</strong></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty-state">No active team members found.</div>';
+  } catch (error) {
+    if (target) target.textContent = error.message || 'Unable to load report.';
+  }
 }
 
 async function toggleMemberActive(memberId, active) {
@@ -750,6 +784,7 @@ function bindViewActions() {
   $$('[data-edit-shift]').forEach((button) => button.addEventListener('click', () => openShiftDialog(button.dataset.editShift)));
   $('#export-csv')?.addEventListener('click', exportAllocations);
   $('#admin-add-member')?.addEventListener('click', openAdminAddMemberDialog);
+  $('#admin-run-report')?.addEventListener('click', runAdminShiftReport);
   document.querySelectorAll('[data-admin-rotate]').forEach((button) => button.addEventListener('click', () => rotateMemberCode(button.dataset.adminRotate)));
   document.querySelectorAll('[data-admin-toggle]').forEach((button) => button.addEventListener('click', () => toggleMemberActive(button.dataset.adminToggle, button.dataset.active === 'true')));
   document.querySelectorAll('[data-admin-name]').forEach((button) => button.addEventListener('click', () => renameMember(button.dataset.adminName)));
