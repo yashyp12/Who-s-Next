@@ -510,7 +510,7 @@ begin
     )
   order by s.work_date desc limit 1;
   if v_current_shift_start is null then
-    v_current_shift_start := v_today::timestamp at time zone v_workspace.timezone;
+    v_current_shift_start := now();
   end if;
   select jsonb_build_object(
     'workspaceName', v_workspace.name,
