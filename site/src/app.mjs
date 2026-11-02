@@ -196,13 +196,19 @@ async function refreshPresence() {
 
 function startPresenceTracking() {
   if (!remoteMode || !supabase || presenceTimer) return;
+  const activityKey = `whos-next-last-activity-${currentMemberId}`;
+  const readLastActivity = () => {
+    try { lastPresenceActivity = Math.max(lastPresenceActivity, Number(localStorage.getItem(activityKey)) || 0); } catch { /* In-memory activity remains available. */ }
+  };
   const markActivity = () => {
     lastPresenceActivity = Date.now();
+    try { localStorage.setItem(activityKey, String(lastPresenceActivity)); } catch { /* In-memory activity remains available. */ }
     if (document.visibilityState === 'visible' && presenceState !== 'active') {
       heartbeatPresence('active').then(refreshPresence).catch((error) => console.warn('Presence update failed:', error));
     }
   };
   const syncPresence = () => {
+    readLastActivity();
     const nextState = Date.now() - lastPresenceActivity >= 5 * 60 * 1000 ? 'away' : 'active';
     if (nextState !== presenceState) {
       heartbeatPresence(nextState).then(refreshPresence).catch((error) => console.warn('Presence update failed:', error));
@@ -215,9 +221,7 @@ function startPresenceTracking() {
   });
   document.addEventListener('visibilitychange', syncPresence);
   window.addEventListener('focus', markActivity);
-  window.addEventListener('pagehide', () => {
-    if (remoteMode && supabase) supabase.rpc('set_member_offline').catch(() => {});
-  });
+  window.addEventListener('storage', (event) => { if (event.key === activityKey) readLastActivity(); });
   presenceTimer = window.setInterval(syncPresence, 20000);
   presenceRefreshTimer = window.setInterval(() => {
     refreshPresence().catch((error) => console.warn('Presence reconciliation failed:', error));
