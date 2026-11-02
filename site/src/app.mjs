@@ -192,7 +192,11 @@ async function joinWorkspace(event) {
   try {
     const { data, error } = await supabase.rpc('join_workspace', { p_access_code: code });
     if (error) throw error;
-    currentMemberId = data.member_id; workspaceId = data.workspace_id; setupRealtime();
+    currentMemberId = data.member_id; workspaceId = data.workspace_id;
+    const { data: me, error: memberError } = await supabase.rpc('get_my_member');
+    if (memberError) throw memberError;
+    currentIsAdmin = Boolean(me?.is_admin);
+    setupRealtime();
     await reloadRemote();
   } catch (error) {
     toast(error.message || 'Unable to join workspace.', true);
