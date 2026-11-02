@@ -116,7 +116,7 @@ begin
   insert into public.member_access_codes(workspace_id,member_id,access_code_hash)
   values(v_workspace_id,p_member_id,encode(extensions.digest(v_code,'sha256'),'hex'))
   on conflict(member_id) do update set access_code_hash=excluded.access_code_hash,updated_at=now();
-  delete from public.member_sessions where workspace_id=v_workspace_id and member_id=p_member_id;
+  delete from public.member_sessions where workspace_id=v_workspace_id and member_id=p_member_id and member_id<>v_actor_id;
   insert into public.audit_events(workspace_id,actor_member_id,event_type,summary,entity_type,entity_id)
   values(v_workspace_id,v_actor_id,'access_code_rotated','Rotated access code for '||v_name,'member',p_member_id);
   return jsonb_build_object('member_id',p_member_id,'name',v_name,'access_code',v_code);
@@ -140,6 +140,8 @@ begin
   if exists(select 1 from public.members where workspace_id=v_workspace_id and id<>p_member_id and lower(name)=lower(trim(p_name))) then raise exception 'Another member already uses this name.'; end if;
   update public.members set name=trim(p_name),active=p_active where id=p_member_id and workspace_id=v_workspace_id;
   if not p_active then
+    if p_member_id = v_actor_id then raise exception 'You cannot deactivate your own active admin session.'; end if;
+    if (select count(*) from public.workspace_admins a join public.members m on m.id=a.member_id and m.workspace_id=a.workspace_id where a.workspace_id=v_workspace_id and m.active) <= 1 and exists(select 1 from public.workspace_admins where workspace_id=v_workspace_id and member_id=p_member_id) then raise exception 'The last active admin cannot be deactivated.'; end if;
     delete from public.member_sessions where workspace_id=v_workspace_id and member_id=p_member_id;
     update public.allocation_state set current_assignee_id=null,updated_at=now() where workspace_id=v_workspace_id and current_assignee_id=p_member_id;
   end if;
@@ -156,13 +158,13 @@ security definer
 set search_path = public, pg_temp
 as $$
 declare
-  v_workspace_id uuid; v_member_id uuid; v_shift_id uuid; v_old jsonb; v_local_date date; v_timezone text;
+  v_workspace_id uuid; v_member_id uuid; v_actor_id uuid; v_shift_id uuid; v_old jsonb; v_local_date date; v_timezone text;
   v_new_start timestamptz; v_new_end timestamptz;
 
 begin
-  select workspace_id, member_id into v_workspace_id, v_member_id from public.member_sessions where auth_user_id = auth.uid();
-  if v_member_id is null then raise exception 'Join the team workspace first.'; end if;
-  if not exists (select 1 from public.workspace_admins where workspace_id = v_workspace_id and member_id = v_member_id) then raise exception 'Workspace admin access required.'; end if;
+  select workspace_id, member_id into v_workspace_id, v_actor_id from public.member_sessions where auth_user_id = auth.uid();
+  if v_actor_id is null then raise exception 'Join the team workspace first.'; end if;
+  if not exists (select 1 from public.workspace_admins where workspace_id = v_workspace_id and member_id = v_actor_id) then raise exception 'Workspace admin access required.'; end if;
   if not exists (select 1 from public.members where id = p_member_id and workspace_id = v_workspace_id) then raise exception 'Member not found in this workspace.'; end if;
   v_member_id := p_member_id;
   if p_start = p_end then raise exception 'Start and end times cannot be identical.'; end if;
@@ -183,12 +185,12 @@ begin
   end if;
   select to_jsonb(s) into v_old from public.shifts s where workspace_id = v_workspace_id and member_id = v_member_id and work_date = p_work_date;
   insert into public.shifts(workspace_id, member_id, work_date, shift_key, start_time, end_time, created_by)
-  values (v_workspace_id, v_member_id, p_work_date, p_shift_key, p_start, p_end, v_member_id)
+  values (v_workspace_id, v_member_id, p_work_date, p_shift_key, p_start, p_end, v_actor_id)
   on conflict (workspace_id, member_id, work_date) do update
     set shift_key = excluded.shift_key, start_time = excluded.start_time, end_time = excluded.end_time, updated_at = now()
   returning id into v_shift_id;
   insert into public.audit_events(workspace_id, actor_member_id, event_type, summary, entity_type, entity_id, metadata)
-  values (v_workspace_id, (select member_id from public.member_sessions where auth_user_id = auth.uid()), 'shift_change', 'Admin updated shift schedule for ' || p_work_date::text, 'shift', v_shift_id, jsonb_build_object('before', v_old, 'after', jsonb_build_object('date', p_work_date, 'key', p_shift_key, 'start', p_start, 'end', p_end)));
+  values (v_workspace_id, v_actor_id, 'shift_change', 'Admin updated shift schedule for ' || p_work_date::text, 'shift', v_shift_id, jsonb_build_object('before', v_old, 'after', jsonb_build_object('date', p_work_date, 'key', p_shift_key, 'start', p_start, 'end', p_end)));
   return jsonb_build_object('shift_id', v_shift_id);
 end;
 $$;
