@@ -165,6 +165,67 @@ function setupRealtime() {
     .subscribe();
 }
 
+async function heartbeatPresence(nextState = presenceState) {
+  if (!remoteMode || !supabase || presenceBusy) return;
+  presenceBusy = true;
+  try {
+    const { error } = await supabase.rpc('heartbeat_member_presence', { p_state: nextState });
+    if (error) throw error;
+    presenceState = nextState;
+  } finally {
+    presenceBusy = false;
+  }
+}
+
+async function refreshPresence() {
+  if (!remoteMode || !supabase) return;
+  const { data, error } = await supabase.rpc('get_workspace_presence');
+  if (error) throw error;
+  const next = Array.isArray(data) ? data : [];
+  if (JSON.stringify(state?.presence || []) !== JSON.stringify(next)) {
+    if (state) state.presence = next;
+    if (state && currentMember()) renderApp();
+  }
+}
+
+function startPresenceTracking() {
+  if (!remoteMode || !supabase || presenceTimer) return;
+  const markActivity = () => {
+    lastPresenceActivity = Date.now();
+    if (document.visibilityState === 'visible' && presenceState !== 'active') {
+      heartbeatPresence('active').then(refreshPresence).catch((error) => console.warn('Presence update failed:', error));
+    }
+  };
+  const syncPresence = () => {
+    const nextState = document.visibilityState === 'hidden' || Date.now() - lastPresenceActivity >= 5 * 60 * 1000
+      ? 'away' : 'active';
+    if (nextState !== presenceState) {
+      heartbeatPresence(nextState).then(refreshPresence).catch((error) => console.warn('Presence update failed:', error));
+    } else {
+      heartbeatPresence(nextState).catch((error) => console.warn('Presence heartbeat failed:', error));
+    }
+  };
+  ['pointerdown','keydown','mousemove','touchstart'].forEach((eventName) => {
+    document.addEventListener(eventName, markActivity, { passive: true });
+  });
+  document.addEventListener('visibilitychange', syncPresence);
+  window.addEventListener('focus', markActivity);
+  window.addEventListener('pagehide', () => {
+    if (remoteMode && supabase) supabase.rpc('set_member_offline').catch(() => {});
+  });
+  presenceTimer = window.setInterval(syncPresence, 20000);
+  presenceRefreshTimer = window.setInterval(() => {
+    refreshPresence().catch((error) => console.warn('Presence reconciliation failed:', error));
+  }, 20000);
+}
+
+function stopPresenceTracking() {
+  if (presenceTimer) window.clearInterval(presenceTimer);
+  if (presenceRefreshTimer) window.clearInterval(presenceRefreshTimer);
+  presenceTimer = null;
+  presenceRefreshTimer = null;
+}
+
 async function reloadRemote() {
   if (refreshInProgress) return;
   refreshInProgress = true;
