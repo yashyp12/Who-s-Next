@@ -572,3 +572,32 @@
 .layout.sidebar-collapsed { grid-template-columns: 248px minmax(0, 1fr) !important; }
 .layout.sidebar-collapsed > .sidebar { display: flex !important; }
 .sidebar-toggle-button { display: none !important; }
+
+
+/* Keep today's allocation history inside its panel instead of growing the page. */
+.allocation-log-panel { min-height: 0; }
+.allocation-log {
+  max-height: min(390px, 44vh);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding-right: 4px;
+}
+.allocation-log-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding-top: 10px;
+  background: #151e28;
+}
+.allocation-log::-webkit-scrollbar,
+.notification-items::-webkit-scrollbar { width: 7px; }
+.allocation-log::-webkit-scrollbar-track,
+.notification-items::-webkit-scrollbar-track { background: #0e151d; border-radius: 99px; }
+.allocation-log::-webkit-scrollbar-thumb,
+.notification-items::-webkit-scrollbar-thumb { background: #425365; border-radius: 99px; }
+.allocation-log { scrollbar-width: thin; scrollbar-color: #425365 #0e151d; }
+@media(max-width:720px) {
+  .allocation-log { max-height: min(340px, 42vh); }
+}
