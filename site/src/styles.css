@@ -528,3 +528,39 @@
   }
   .loader-progress span { width: 100%; opacity: .65; }
 }
+
+
+/* Header: centered clock, ordered right-side actions, and smooth sidebar toggle. */
+.topbar{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:22px}
+.topbar-title-wrap{min-width:0}
+.digital-clock{justify-self:center;font-size:17px;font-weight:800;letter-spacing:1.1px;padding:11px 17px;min-width:142px;text-align:center}
+.top-actions{justify-self:end;display:flex;align-items:center;justify-content:flex-end;flex-wrap:nowrap;gap:9px;white-space:nowrap}
+.top-actions .button{flex:0 0 auto}
+.top-actions .notification-center{order:3;flex:0 0 auto}
+.top-actions .live-pill,.top-actions .demo-pill{order:4;flex:0 0 auto}
+.top-actions #new-request-top{order:1}
+.top-actions #refresh-workspace{order:2}
+.top-actions .mobile-profile-toggle,.top-actions .mobile-profile-popover{display:none}
+.layout{grid-template-columns:238px minmax(0,1fr);transition:grid-template-columns .28s cubic-bezier(.2,.75,.25,1)}
+.layout>.sidebar{min-width:0;overflow:hidden;opacity:1;transform:translateX(0);transition:opacity .2s ease,transform .28s ease,padding .28s ease,border-color .28s ease}
+.layout.sidebar-collapsed{grid-template-columns:0 minmax(0,1fr)}
+.layout.sidebar-collapsed>.sidebar{width:0;min-width:0;padding-left:0;padding-right:0;border-right-color:transparent;opacity:0;transform:translateX(-14px);pointer-events:none}
+@media(max-width:1100px){.topbar{gap:14px}.top-actions{gap:7px}.top-actions .button{padding:9px 10px}}
+@media(max-width:900px){
+ .topbar{grid-template-columns:minmax(0,1fr) auto;gap:12px}
+ .topbar-title-wrap{grid-column:1/-1}
+ .digital-clock{grid-column:1;justify-self:start}
+ .top-actions{grid-column:2;justify-self:end}
+}
+@media(max-width:720px){
+ .layout{display:block}
+ .layout>.sidebar{width:100%;max-height:180px;opacity:1;transform:translateY(0);padding:10px 12px;border-bottom:1px solid var(--line);transition:max-height .25s ease,opacity .2s ease,transform .25s ease,padding .25s ease}
+ .layout.sidebar-collapsed>.sidebar{display:flex;width:100%;max-height:0;padding-top:0;padding-bottom:0;border-bottom-color:transparent;opacity:0;transform:translateY(-8px)}
+ .topbar{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;margin-bottom:22px}
+ .topbar-title-wrap,.digital-clock,.top-actions{grid-column:1;justify-self:stretch}
+ .digital-clock{justify-self:center;font-size:16px}
+ .top-actions{width:100%;justify-content:center;flex-wrap:wrap;white-space:normal}
+ .top-actions .live-pill,.top-actions .demo-pill{display:flex}
+ .top-actions .mobile-profile-toggle{display:none}
+}
+@media(prefers-reduced-motion:reduce){.layout,.layout>.sidebar,.layout.sidebar-collapsed>.sidebar{transition:none!important}}
