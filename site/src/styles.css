@@ -133,3 +133,12 @@
 .notification-toast strong{font-size:12px}
 .notification-toast div{font-size:11px;color:#c4ced9}
 @media(max-width:720px){.notification-center{position:static}.notification-popover{position:fixed;top:132px;left:12px;right:12px;width:auto;max-height:calc(100dvh - 150px)}.notification-trigger{font-size:10px;padding:7px 8px}.top-actions{position:relative}}
+
+
+/* Workspace administration */
+.admin-member-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid #ffffff0d;border-radius:12px;background:#ffffff04}
+.admin-member-main{display:flex;align-items:center;gap:10px;min-width:0}
+.admin-member-main strong{display:block;font-size:12px}
+.admin-member-main small{display:block;color:var(--muted);font-size:10px;margin-top:4px}
+.admin-member-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
+@media(max-width:720px){.admin-member-row{align-items:flex-start;flex-direction:column}.admin-member-actions{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.admin-member-actions .button{min-height:38px}}
