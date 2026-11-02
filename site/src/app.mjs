@@ -792,3 +792,5 @@ boot();
 // Admin CI target includes the shift-aware migration dependency.
 
 // Revalidate admin controls against the updated CI base.
+
+// Keep admin authorization bound to the authenticated member, never a client-selected role.
