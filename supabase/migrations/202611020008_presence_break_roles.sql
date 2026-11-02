@@ -581,6 +581,10 @@ begin
     nullif(to_jsonb(new)->>'workspace_id','')::uuid,
     nullif(to_jsonb(old)->>'workspace_id','')::uuid
   );
+  if tg_table_name='member_presence' and tg_op='UPDATE'
+     and new.presence_state is not distinct from old.presence_state then
+    return null;
+  end if;
   if v_workspace_id is not null then
     perform realtime.send(
       jsonb_build_object('table',tg_table_name,'operation',tg_op),
