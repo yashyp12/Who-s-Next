@@ -163,7 +163,9 @@ async function loadNotifications({ notify = false } = {}) {
     if (error) throw error;
     const next = (Array.isArray(data) ? data : []).filter((item) => !item.readAt);
   if (!initialLoadComplete) {
-    notifications = next;
+    const realtimeArrivals = notifications.filter((item) => !item.readAt);
+    const fetchedIds = new Set(next.map((item) => item.id));
+    notifications = [...next, ...realtimeArrivals.filter((item) => !fetchedIds.has(item.id))].slice(0, 30);
     next.forEach((item) => { if (item.id) seenNotificationIds.add(item.id); });
     initialLoadComplete = true;
   } else {
@@ -173,10 +175,15 @@ async function loadNotifications({ notify = false } = {}) {
         if (!previousIds.has(item.id) && !seenNotificationIds.has(item.id)) notifyNewItem(item);
       }
     }
-    notifications = next.map((item) => {
-      const current = notifications.find((entry) => entry.id === item.id);
-      return current ? { ...item, readAt: item.readAt || current.readAt } : item;
-    });
+    const fetchedIds = new Set(next.map((item) => item.id));
+    const realtimeArrivals = notifications.filter((item) => !item.readAt && !fetchedIds.has(item.id));
+    notifications = [
+      ...next.map((item) => {
+        const current = notifications.find((entry) => entry.id === item.id);
+        return current ? { ...item, readAt: item.readAt || current.readAt } : item;
+      }),
+      ...realtimeArrivals,
+    ].slice(0, 30);
     next.forEach((item) => { if (item.id) seenNotificationIds.add(item.id); });
   }
     renderList();
