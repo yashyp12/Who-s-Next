@@ -155,3 +155,5 @@ export function initializeNotificationCenter({ supabase, memberId }) {
   }
   renderList();
 }
+
+// Assignment alerts include the server-calculated next eligible turn.
