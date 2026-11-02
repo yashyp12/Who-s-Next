@@ -71,5 +71,5 @@ test('request withdrawal migration restricts updates to the authenticated reques
   assert.match(migration, /create or replace function public\.update_my_availability_request/);
   assert.match(migration, /create or replace function public\.take_over_allocation/);
   assert.match(migration, /presence_state = 'active'/);
-  assert.match(migration, /last_seen_at > now\(\) - interval '90 seconds'/);
+  assert.match(migration, /last_seen_at > v_now - interval '90 seconds'/);
 });
