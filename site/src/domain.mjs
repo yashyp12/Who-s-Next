@@ -176,3 +176,5 @@ export function formatDuration(minutes) {
   const remainder = value % 60;
   return hours ? `${hours}h ${remainder}m` : `${remainder}m`;
 }
+
+// Keep the status contract explicit for new-email and existing-ticket allocation.
