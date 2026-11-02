@@ -366,17 +366,14 @@ begin
   ) then raise exception 'This break overlaps another planned break.'; end if;
   if (
     coalesce((
-      select sum(extract(epoch from (
-        ((b.work_date + b.end_time) + case when b.end_time <= b.start_time then interval '1 day' else interval '0' end)
-        - (b.work_date + b.start_time)
-      )) / 60)
+      select sum(extract(epoch from (existing_end - existing_start)) / 60)
       from (
         select
           (b.work_date + b.start_time) at time zone v_timezone as existing_start,
           ((b.work_date + b.end_time) + case when b.end_time <= b.start_time then interval '1 day' else interval '0' end) at time zone v_timezone as existing_end
         from public.breaks b
         where b.workspace_id=v_workspace_id and b.member_id=v_member_id
-          and b.work_date between v_shift_date and v_shift_date + case when v_shift_end::date > v_shift_start::date then 1 else 0 end
+          and b.work_date between v_shift_date and v_shift_date + 1
       ) existing_breaks
       where existing_start >= v_shift_start and existing_end <= v_shift_end
     ), 0)
