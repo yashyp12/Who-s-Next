@@ -12,7 +12,7 @@ const remoteConfigured = Boolean(CONFIG.supabaseUrl && CONFIG.supabaseAnonKey);
 let supabase = null;
 let remoteMode = false;
 let state = null;
-let activeView = 'overview';
+let activeView = 'allocation';
 let currentMemberId = null;
 let workspaceId = null;
 let realtimeChannel = null;
@@ -240,7 +240,7 @@ function renderApp() {
       <aside class="sidebar">
         <div><div class="brand"><span class="brand-mark">W</span><div class="brand-copy">WHO'S <span>next</span></div></div><div class="workspace-tag">${escapeHtml(state.workspaceName)}</div></div>
         <div><div class="nav-label">Workspace</div><nav class="nav" aria-label="Main navigation">
-          ${navButton('overview','⌂','Overview')}${navButton('schedule','▦','My schedule')}${navButton('requests','↗','Requests',counts.pending)}${navButton('allocation','⇄','Allocation')}${navButton('reports','▤','Reports')}
+          ${navButton('allocation','⇄','Allocate')}${navButton('overview','⌂','Team overview')}${navButton('schedule','▦','My profile')}${navButton('requests','↗','Requests',counts.pending)}${navButton('reports','▤','Reports')}
         </nav></div>
         <div class="sidebar-bottom">
           ${remoteMode ? '<div class="demo-note" style="border-color:#355944;background:#183327;color:#a6d9b5">Live team workspace<br/>Changes sync across browsers.</div>' : '<div class="demo-note">Preview mode<br/>Sample team data is stored only in this browser. Connect Supabase for shared live data.</div>'}
@@ -657,11 +657,8 @@ function toast(message, error = false) {
 
 async function boot() {
   if (!remoteConfigured) {
-    remoteMode = false; state = loadDemoState();
-    const savedProfile = localStorage.getItem(PROFILE_KEY);
-    currentMemberId = state.members.some((member) => member.id === savedProfile) ? savedProfile : 'member-14';
-    if (!savedProfile) localStorage.setItem(PROFILE_KEY, currentMemberId);
-    renderApp();
+    remoteMode = false;
+    $('#app').innerHTML = '<main class="join-screen"><section class="join-card"><div class="brand"><span class="brand-mark">W</span><div class="brand-copy">WHO\'S <span>next</span></div></div><div class="eyebrow">Workspace setup</div><h1>Live workspace unavailable.</h1><p>This site is not connected to its Supabase workspace yet. No sample members or fake assignments are being shown.</p><div class="notice">The deployment must provide the Supabase project URL and publishable key before team members can sign in.</div><button class="button button-secondary" onclick="location.reload()">Retry connection</button></section></main>';
     return;
   }
   try { await connectRemote(); }
