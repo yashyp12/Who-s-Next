@@ -18,7 +18,7 @@ WHO'S next gives a 14-person, multi-shift team one shared view of who is working
 - Lightweight shift check-in/check-out event capture and recent attendance history.
 - Server-side round-robin allocation with a locked rotation pointer; skipped people do not advance the pointer.
 - Allocation, request and handover history, plus CSV allocation export.
-- No username/password screen and no logout button. The shared Supabase workspace uses an invisible anonymous browser session and a one-time team access code.
+- No username/password screen and no logout button. The shared Supabase workspace uses an invisible anonymous browser session and an individual one-time access code.
 - A local preview mode with fictional sample data so the UI and core allocation rules can be explored without creating a backend.
 
 ## Run the local preview
@@ -40,17 +40,17 @@ The shared application uses Supabase Free for Postgres, anonymous sessions and R
 
 1. Create a Supabase project on the Free plan.
 2. In Supabase Authentication settings, enable **Anonymous Sign-Ins**. There is no email, password or logout flow in this app.
-3. Open the Supabase SQL Editor and run `supabase/migrations/202611010001_initial_schema.sql`.
-4. Edit `supabase/seed.sql`: replace the 14 sample member names and replace `REPLACE-WITH-A-LONG-TEAM-CODE` with a unique team code of at least 20 random characters. Keep the real code out of Git. Run the edited seed SQL once.
+3. Open the Supabase SQL Editor and run all migrations in order: `202611010001_initial_schema.sql`, `202611020001_individual_member_access_codes.sql`, `202611020002_allocation_timeline_shift_handover.sql`, and `202611020003_expose_email_subject_in_dashboard.sql`, and `202611020004_enforce_shift_owner_for_reviews.sql`.
+4. Edit `supabase/seed.sql`: replace the 14 sample member names and all 14 individual-code placeholders in `supabase/seed.sql` with unique random codes of at least 16 characters. The legacy workspace code placeholder is unused after the second migration. Keep every real code out of Git and share each code privately with its matching colleague. Run the edited seed SQL once.
 5. Set `supabaseUrl` and the **publishable/anon key** in `site/config.js`. Never use a Supabase `service_role` key in browser code.
 6. Deploy the repository to Netlify with `site` as the publish directory. No build command is required.
-7. Share the deployed URL and team code with the 14 colleagues. Each browser chooses the colleague profile it represents once; no password/account is created.
+7. Share the deployed URL with the team and give each colleague only their own individual access code. The code selects their profile automatically; no roster picker or password/account is shown.
 
 ### Identity and access model — read before using real team data
 
-This project intentionally has no individual login/logout system. Supabase silently creates a browser-scoped anonymous user. The user selects a roster name and enters the shared team code once. The code is checked by a database function; its hash is stored in Postgres. Direct table access is revoked and changes are performed through database RPC functions.
+This project intentionally has no individual login/logout system. Supabase silently creates a browser-scoped anonymous user. Each colleague enters an individual code that maps to exactly one active roster member. The code is checked by a database function; its hash is stored in Postgres. Direct table access is revoked and changes are performed through database RPC functions.
 
-This is a **low-friction, trust-based team identity model**, not verified employee authentication. Anyone who knows the shared code can select a roster profile, and a browser's anonymous identity is not recoverable after clearing site data or switching devices. Consequently, the audit trail records the selected profile, not a verified corporate identity. Do not use it for disciplinary decisions, HR records, sensitive personal data or security-critical approvals. For stronger accountability, the later upgrade path is individual SSO or verified email authentication.
+This is a **low-friction, trust-based team identity model**, not verified employee authentication. Anyone who obtains another colleague's code can impersonate that colleague. Browser anonymous identities are device-scoped; clearing site data or switching devices requires entering that colleague's code again. Consequently, the audit trail records the selected profile, not a verified corporate identity. Do not use it for disciplinary decisions, HR records, sensitive personal data or security-critical approvals. For stronger accountability, the later upgrade path is individual SSO or verified email authentication.
 
 ## Operational rules
 
@@ -58,8 +58,8 @@ This is a **low-friction, trust-based team identity model**, not verified employ
 2. Approved leave and approved unavailability remove that employee from the queue for the approved time window.
 3. A scheduled break removes the employee only during the break window.
 4. A pending request does **not** affect eligibility.
-5. The queue rotates through the full roster order after the last recorded recipient, skipping people who are currently ineligible. Skipping does not move the pointer.
-6. Only the current email assignee can approve/reject requests or record the next allocation; the assignee cannot decide their own request.
+5. The queue rotates through the full roster order after the last recorded recipient, skipping people who are currently ineligible. A successful allocation advances the pointer immediately in the same database transaction; completion does not control the rotation. Break expiry returns a colleague to their normal queue position automatically. A visible live clock shows workspace time to the second; the dashboard refreshes at the next scheduled shift, break or approved-request boundary to apply transitions without constant polling.
+6. Only the current shift allocation owner can approve/reject requests or record the next allocation; the owner cannot decide their own request. Allocation responsibility automatically hands over when that owner leaves shift or becomes unavailable, selecting the most recently started eligible colleague.
 7. Any mapped team member may take over allocation responsibility. Every handover is recorded, and pending requests remain pending for the new assignee.
 8. Shift swaps affect one date only and are applied only after the invited colleague accepts.
 9. All operational timestamps are interpreted in the workspace timezone (seed default: `Asia/Kolkata`).

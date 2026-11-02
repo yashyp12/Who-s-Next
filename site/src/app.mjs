@@ -17,6 +17,9 @@ let currentMemberId = null;
 let workspaceId = null;
 let realtimeChannel = null;
 let toastTimer = null;
+let clockTimer = null;
+let boundaryTimer = null;
+let refreshInProgress = false;
 
 const partsInTimezone = (date, timeZone) => { const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(date); return Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value])); };
 const partsInWorkspace = (date = new Date()) => partsInTimezone(date, state?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);
@@ -30,7 +33,7 @@ const id = () => globalThis.crypto?.randomUUID?.() || `id-${Date.now()}-${Math.r
 const statusFor = (member) => getMemberStatus(member, { now: new Date().toISOString(), date: localDate(), time: localTime() });
 const prettyDate = (date) => new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${date}T12:00:00Z`));
 const prettyTime = (value) => { if (!value) return '—'; const date = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(value) ? new Date(workspaceInputToIso(value.slice(0, 16))) : new Date(value); return new Intl.DateTimeFormat(undefined, { timeZone: state?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone, hour: '2-digit', minute: '2-digit' }).format(date); };
-const prettyDateTime = (value) => value ? new Intl.DateTimeFormat(undefined, { timeZone: state?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) : '—';
+const prettyDateTime = (value) => value ? new Intl.DateTimeFormat(undefined, { timeZone: state?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone, day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date(value)) : '—';
 function workspaceInputToIso(value) {
   if (!value || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) throw new Error('Enter a valid date and time.');
   const [datePart, timePart] = value.split('T');
@@ -100,7 +103,7 @@ function mapDashboard(payload) {
   const mapped = {
     workspaceName: payload.workspaceName || 'Team workspace', timezone: payload.timezone || 'Asia/Kolkata',
     members: payload.members || [], shifts: payload.shifts || [], breaks: payload.breaks || [],
-    requests: payload.requests || [], allocations: payload.allocations || [], handovers: payload.handovers || [], shiftSwaps: payload.shiftSwaps || [],
+    requests: payload.requests || [], allocations: (payload.allocations || []).map((item) => ({ ...item, emailSubject: item.emailSubject || null })), handovers: payload.handovers || [], shiftSwaps: payload.shiftSwaps || [],
     currentAssigneeId: payload.currentAssigneeId || null, lastAllocatedMemberId: payload.lastAllocatedMemberId || null,
     activities: payload.activities || [], attendance: payload.attendance || [],
   };
@@ -148,62 +151,48 @@ function setupRealtime() {
 }
 
 async function reloadRemote() {
-  const { data, error } = await supabase.rpc('get_dashboard');
-  if (error) throw error;
-  state = mapDashboard(data || {});
-  renderApp();
+  if (refreshInProgress) return;
+  refreshInProgress = true;
+  try {
+    const { error: handoverError } = await supabase.rpc('ensure_shift_assignee');
+    if (handoverError) throw handoverError;
+    const { data, error } = await supabase.rpc('get_dashboard');
+    if (error) throw error;
+    state = mapDashboard(data || {});
+    renderApp();
+  } finally { refreshInProgress = false; }
 }
 
 function showJoinScreen(message = '') {
   $('#app').innerHTML = `
     <main class="join-screen"><section class="join-card">
       <div class="brand"><span class="brand-mark">W</span><div><div class="brand-copy">WHO'S <span>next</span></div><div class="workspace-tag">Team operations</div></div></div>
-      <div class="eyebrow">One shared workspace</div><h1>Step into your shift.</h1>
-      <p>No account, email or password. Enter the team code once, then choose your name. This browser remembers your anonymous workspace session.</p>
+      <div class="eyebrow">Your team workspace</div><h1>Step into your shift.</h1>
+      <p>Enter the individual access code shared with you. Your code identifies your team profile—no username, email or password required.</p>
       ${message ? `<div class="notice">${escapeHtml(message)}</div>` : ''}
       <form id="join-form">
-        <div class="field"><label for="join-code">Team access code</label><input id="join-code" name="code" type="password" autocomplete="off" required minlength="6" placeholder="Enter the code shared by your team" /></div>
-        <button class="button button-primary" type="button" id="load-roster">Continue <span>→</span></button>
-        <div id="roster-field" class="field hidden" style="margin-top:14px"><label for="join-member">Your team profile</label><select id="join-member" required><option value="">Choose your name</option></select><button class="button button-primary" type="submit">Open workspace</button></div>
+        <div class="field"><label for="join-code">Your individual access code</label><input id="join-code" name="code" type="password" autocomplete="one-time-code" required minlength="16" maxlength="200" placeholder="Enter your personal team code" /></div>
+        <button class="button button-primary" type="submit">Open workspace <span>→</span></button>
       </form>
-      <div class="join-help">This is a shared team space, not verified employee authentication. Anyone with the team code can choose a roster profile. Use only approved operational information.</div>
+      <div class="join-help">Your code maps to one team member. Keep it private and contact the workspace owner if it is lost or exposed.</div>
     </section></main>`;
-  $('#load-roster').addEventListener('click', loadJoinRoster);
   $('#join-form').addEventListener('submit', joinWorkspace);
-}
-
-async function loadJoinRoster() {
-  const code = $('#join-code').value.trim();
-  if (!code) return toast('Enter the team access code.', true);
-  const button = $('#load-roster'); button.disabled = true; button.textContent = 'Checking…';
-  try {
-    const { data, error } = await supabase.rpc('get_joinable_workspace', { p_join_code: code });
-    if (error) throw error;
-    const select = $('#join-member');
-    select.innerHTML = '<option value="">Choose your name</option>' + (data?.members || []).map((member) => `<option value="${escapeAttr(member.id)}">${escapeHtml(member.name)}</option>`).join('');
-    if (!data?.members?.length) throw new Error('No active team members are configured yet. Ask the workspace owner to seed the roster.');
-    $('#roster-field').classList.remove('hidden');
-    button.textContent = 'Roster loaded';
-  } catch (error) {
-    toast(error.message || 'Unable to open this workspace.', true);
-    button.disabled = false; button.textContent = 'Continue →';
-  }
 }
 
 async function joinWorkspace(event) {
   event.preventDefault();
   const code = $('#join-code').value.trim();
-  const memberId = $('#join-member').value;
-  if (!memberId) return toast('Choose your team profile.', true);
-  const button = $('#join-form button[type="submit"]'); button.disabled = true; button.textContent = 'Opening…';
+  if (code.length < 16) return toast('Enter the individual access code shared with you.', true);
+  const button = $('#join-form button[type="submit"]');
+  button.disabled = true; button.textContent = 'Opening workspace…';
   try {
-    const { data, error } = await supabase.rpc('join_workspace', { p_join_code: code, p_member_id: memberId });
+    const { data, error } = await supabase.rpc('join_workspace', { p_access_code: code });
     if (error) throw error;
     currentMemberId = data.member_id; workspaceId = data.workspace_id; setupRealtime();
     await reloadRemote();
   } catch (error) {
     toast(error.message || 'Unable to join workspace.', true);
-    button.disabled = false; button.textContent = 'Open workspace';
+    button.disabled = false; button.innerHTML = 'Open workspace <span>→</span>';
   }
 }
 
@@ -255,11 +244,11 @@ function renderApp() {
         </nav></div>
         <div class="sidebar-bottom">
           ${remoteMode ? '<div class="demo-note" style="border-color:#355944;background:#183327;color:#a6d9b5">Live team workspace<br/>Changes sync across browsers.</div>' : '<div class="demo-note">Preview mode<br/>Sample team data is stored only in this browser. Connect Supabase for shared live data.</div>'}
-          <div class="profile-mini"><span class="avatar">${initials(me.name)}</span><div style="min-width:0;flex:1"><strong>${escapeHtml(me.name)}</strong><small>${isCurrentAssignee() ? 'Current email assignee' : 'Team member'}</small>${remoteMode ? '' : `<select id="demo-profile" aria-label="Preview as team member" style="margin-top:6px;max-width:155px;background:#111923;border:1px solid #334253;color:#9eafc2;border-radius:6px;padding:4px;font-size:9px">${state.members.map((m)=>`<option value="${m.id}" ${m.id===currentMemberId?'selected':''}>${escapeHtml(m.name)}</option>`).join('')}</select>`}</div></div>
+          <div class="profile-mini"><span class="avatar">${initials(me.name)}</span><div style="min-width:0;flex:1"><strong>${escapeHtml(me.name)}</strong><small>Signed in as · ${isCurrentAssignee() ? 'Shift allocation owner' : 'Team member'}</small>${remoteMode ? '' : `<select id="demo-profile" aria-label="Preview as team member" style="margin-top:6px;max-width:155px;background:#111923;border:1px solid #334253;color:#9eafc2;border-radius:6px;padding:4px;font-size:9px">${state.members.map((m)=>`<option value="${m.id}" ${m.id===currentMemberId?'selected':''}>${escapeHtml(m.name)}</option>`).join('')}</select>`}</div></div>
         </div>
       </aside>
       <main class="main">
-        <header class="topbar"><div><div class="eyebrow">${activeView === 'overview' ? 'Live operations' : 'Team workspace'}</div><h1 class="page-title">${viewTitle(activeView)}</h1></div><div class="top-actions">${remoteMode ? '<span class="live-pill"><i class="live-dot"></i> Live sync</span>' : '<span class="demo-pill">● Local preview</span>'}<button class="button button-secondary button-small" id="refresh-workspace">↻ Refresh</button><button class="button button-secondary button-small" id="new-request-top">＋ New request</button></div></header>
+        <header class="topbar"><div><div class="eyebrow">${activeView === 'overview' ? 'Live operations' : 'Team workspace'}</div><h1 class="page-title">${viewTitle(activeView)}</h1></div><div class="top-actions"><span id="workspace-clock" class="digital-clock" aria-label="Workspace time">--:--:--</span>${remoteMode ? '<span class="live-pill"><i class="live-dot"></i> Live sync</span>' : '<span class="demo-pill">● Local preview</span>'}<button class="button button-secondary button-small" id="refresh-workspace">↻ Refresh</button><button class="button button-secondary button-small" id="new-request-top">＋ New request</button></div></header>
         <section class="section-view ${activeView === 'overview' ? 'active' : ''}" id="view-overview">${renderOverview(me, assignee, counts, statuses)}</section>
         <section class="section-view ${activeView === 'schedule' ? 'active' : ''}" id="view-schedule">${renderSchedule(me)}</section>
         <section class="section-view ${activeView === 'requests' ? 'active' : ''}" id="view-requests">${renderRequests(me)}</section>
@@ -272,6 +261,67 @@ function renderApp() {
   $('#refresh-workspace')?.addEventListener('click', async () => { try { if (remoteMode) await reloadRemote(); else renderApp(); toast('Workspace refreshed.'); } catch (error) { toast(error.message || 'Refresh failed.', true); } });
   $('#demo-profile')?.addEventListener('change', (event) => { currentMemberId = event.target.value; localStorage.setItem(PROFILE_KEY, currentMemberId); renderApp(); });
   bindViewActions();
+  startWorkspaceClock();
+  scheduleOperationalRefresh();
+}
+
+function startWorkspaceClock() {
+  const update = () => {
+    const clock = $('#workspace-clock');
+    if (clock) clock.textContent = new Intl.DateTimeFormat(undefined, { timeZone: state?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date());
+  };
+  update();
+  if (clockTimer) clearInterval(clockTimer);
+  clockTimer = setInterval(update, 1000);
+}
+
+function addCalendarDays(date, days) {
+  const value = new Date(`${date}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+function nextOperationalBoundary() {
+  const now = Date.now();
+  const candidates = [];
+  const addLocalBoundary = (date, time) => {
+    try {
+      const value = new Date(workspaceInputToIso(`${date}T${time}`)).getTime();
+      if (Number.isFinite(value) && value > now) candidates.push(value);
+    } catch { /* Ignore invalid or incomplete schedule entries. */ }
+  };
+  for (const shift of state.shifts || []) {
+    const endDate = shift.end <= shift.start ? addCalendarDays(shift.date, 1) : shift.date;
+    addLocalBoundary(shift.date, shift.start);
+    addLocalBoundary(endDate, shift.end);
+  }
+  for (const item of state.breaks || []) {
+    const endDate = item.end <= item.start ? addCalendarDays(item.date, 1) : item.date;
+    addLocalBoundary(item.date, item.start);
+    addLocalBoundary(endDate, item.end);
+  }
+  for (const request of state.requests || []) {
+    if (request.status !== 'approved') continue;
+    for (const value of [request.startAt, request.endAt]) {
+      const timestamp = new Date(value).getTime();
+      if (Number.isFinite(timestamp) && timestamp > now) candidates.push(timestamp);
+    }
+  }
+  return candidates.length ? Math.min(...candidates) : null;
+}
+
+function scheduleOperationalRefresh() {
+  if (boundaryTimer) clearTimeout(boundaryTimer);
+  const boundary = nextOperationalBoundary();
+  if (!boundary) return;
+  const delay = Math.max(1000, boundary - Date.now() + 500);
+  boundaryTimer = setTimeout(async () => {
+    if (refreshInProgress) return scheduleOperationalRefresh();
+    try {
+      if (remoteMode) await reloadRemote();
+      else renderApp();
+    } catch (error) { toast(error.message || 'Automatic shift refresh failed.', true); }
+  }, delay);
 }
 
 function navButton(view, icon, label, badge = 0) {
@@ -309,6 +359,7 @@ function renderOverview(me, assignee, counts, statuses) {
   const queue = queueMembers();
   const pending = state.requests.filter((request) => request.status === 'pending').slice(0, 3);
   const allocations = state.allocations.slice(0, 5);
+  const myStatus = statuses.find(({ member }) => member.id === currentMemberId)?.status;
   const hour = Number(localTime().slice(0, 2));
   return `
     <div class="greeting-row"><div><div class="eyebrow">${prettyDate(localDate())} · ${localTime()} local time</div><h2 style="font:800 19px Manrope;margin:8px 0 0">Good ${hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'}, ${escapeHtml(me.name.split(' ')[0])}.</h2><p>Here’s the current pulse of your team. Keep the next handover clear.</p></div><div class="date-stamp"><strong>${escapeHtml(state.workspaceName)}</strong>${statuses.length} rostered team members</div></div>
@@ -324,7 +375,7 @@ function renderOverview(me, assignee, counts, statuses) {
         <div class="report-grid" style="grid-template-columns:1fr 1fr;margin:0 0 13px"> <div class="report-card"><small>Working now</small><strong>${statuses.filter((x) => x.status.code !== 'off_shift' && x.status.code !== 'leave').length}</strong></div><div class="report-card"><small>Off shift / leave</small><strong>${statuses.filter((x) => ['off_shift','leave'].includes(x.status.code)).length}</strong></div></div>
         <div class="muted-copy">WHO’S next uses scheduled shifts, breaks and approved unavailability to calculate allocation eligibility. Requests still awaiting a decision do not remove an employee from the queue.</div>
         <div class="attendance-control"><div><strong>Shift attendance</strong><small>${latestAttendanceForCurrentMember()?.eventType === 'check_in' ? `Checked in at ${prettyTime(latestAttendanceForCurrentMember().occurredAt)}` : latestAttendanceForCurrentMember()?.eventType === 'check_out' ? `Last checked out at ${prettyTime(latestAttendanceForCurrentMember().occurredAt)}` : 'No attendance event recorded yet'}</small></div><button class="button button-secondary button-small" id="attendance-toggle">${latestAttendanceForCurrentMember()?.eventType === 'check_in' ? 'Check out' : 'Check in'}</button></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="button button-secondary button-small" id="add-break">＋ Plan a break</button><button class="button button-secondary button-small" id="set-shift">▦ Update shift</button></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">${myStatus?.code === 'break' ? '<button class="button button-secondary button-small" id="extend-break">＋ Extend my break</button>' : '<button class="button button-secondary button-small" id="add-break">＋ Plan a break</button>'}<button class="button button-secondary button-small" id="set-shift">▦ Update shift</button></div>
       </section>
     </div>
     <section class="panel team-panel" style="margin-bottom:16px"><div class="panel-head"><div><div class="panel-title">Team availability</div><div class="panel-subtitle">Eligibility is recalculated from the current shift and approved time windows</div></div><span class="panel-subtitle">${counts.available} available / ${statuses.length} total</span></div>
@@ -372,11 +423,17 @@ function renderRequests(me) {
 function renderAllocation(me, assignee) {
   const queue = queueMembers();
   const today = state.allocations.filter((item) => localDate(new Date(item.assignedAt)) === localDate());
-  return `<div class="page-toolbar"><div><div class="panel-title">Round-robin queue</div><div class="panel-subtitle">Unavailable employees are skipped. The pointer moves only after a recorded allocation.</div></div><div class="toolbar-actions"><button class="button button-secondary" id="take-over" ${isCurrentAssignee() ? 'disabled' : ''}>Take over responsibility</button><button class="button button-primary" id="record-next" ${queue.length && isCurrentAssignee() ? '' : 'disabled'}>Record next allocation →</button></div></div>
-    <div class="notice">This is an allocation-support tool. It does not read Outlook or send emails. Record the assignment here after you manually assign it in your approved email system.</div>
-    <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Current responsibility</div><div class="panel-subtitle">Handover is available to every team member</div></div></div><div class="assignee-card"><span class="avatar">${assignee ? initials(assignee.name) : '?'}</span><div class="assignee-meta"><strong>${escapeHtml(assignee?.name || 'Not assigned')}</strong><small>${isCurrentAssignee() ? 'You are currently responsible for allocation' : 'Current allocation owner'}</small></div></div><div class="muted-copy">A new assignee inherits the pending approval queue automatically. Previous handovers are retained in the audit history.</div></section>
+  return `<div class="page-toolbar"><div><div class="panel-title">Round-robin queue</div><div class="panel-subtitle">Unavailable colleagues automatically return to the queue when their break or approved time window ends.</div></div><div class="toolbar-actions"><button class="button button-secondary" id="take-over" ${isCurrentAssignee() ? 'disabled' : ''}>Take over responsibility</button><button class="button button-primary" id="record-next" ${queue.length && isCurrentAssignee() ? '' : 'disabled'}>Record next allocation →</button></div></div>
+    <div class="notice">Assign the email in Outlook first, then record it here. WHO'S next captures the recipient, assigner, optional subject/reference and exact server timestamp. The next colleague becomes first in line immediately after the record succeeds.</div>
+    <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Current responsibility</div><div class="panel-subtitle">Automatically follows the active shift when the current owner goes off shift or becomes unavailable</div></div></div><div class="assignee-card"><span class="avatar">${assignee ? initials(assignee.name) : '?'}</span><div class="assignee-meta"><strong>${escapeHtml(assignee?.name || 'Not assigned')}</strong><small>${isCurrentAssignee() ? 'You are currently responsible for allocation' : 'Current allocation owner'}</small></div></div><div class="muted-copy">Your profile remains signed in. Only the shared allocation responsibility changes at shift handover.</div></section>
     <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Next eligible sequence</div><div class="panel-subtitle">${queue.length} people ready · last allocation to ${escapeHtml(state.members.find((m) => m.id === state.lastAllocatedMemberId)?.name || 'nobody yet')}</div></div></div><div class="queue-list">${queue.length ? queue.map((member, index) => `<div class="queue-item"><span class="queue-number">${String(index + 1).padStart(2, '0')}</span><span class="avatar">${initials(member.name)}</span><div class="queue-person"><strong>${escapeHtml(member.name)}</strong><small>${escapeHtml(SHIFT_PRESETS[member.shiftKey || member.shift?.key]?.label || 'Scheduled shift')}</small></div><span class="queue-tag">ELIGIBLE</span></div>`).join('') : '<div class="empty-state">No eligible employees at the moment.</div>'}</div></section>
-    <section class="panel"><div class="panel-head"><div><div class="panel-title">Today’s allocation log</div><div class="panel-subtitle">${today.length} assignment(s) recorded today</div></div></div><div class="schedule-list">${today.length ? today.map((item) => `<div class="schedule-row"><div><strong>${escapeHtml(state.members.find((m) => m.id === item.memberId)?.name || 'Unknown member')}</strong><small style="display:block">Assigned by ${escapeHtml(state.members.find((m) => m.id === item.assignedBy)?.name || 'Unknown')}</small></div><div>${prettyTime(item.assignedAt)}</div><div>${escapeHtml(item.reference || 'No reference')}</div><div><span class="status success">Recorded</span></div></div>`).join('') : '<div class="empty-state">No assignments recorded today.</div>'}</div></section>`;
+    <section class="panel"><div class="panel-head"><div><div class="panel-title">Today’s allocation log</div><div class="panel-subtitle">${today.length} assignment(s) recorded today · newest first</div></div></div><div class="schedule-list">${today.length ? today.map((item) => `<div class="schedule-row allocation-row"><div><strong>${escapeHtml(state.members.find((m) => m.id === item.memberId)?.name || 'Unknown member')}</strong><small style="display:block">Assigned by ${escapeHtml(state.members.find((m) => m.id === item.assignedBy)?.name || 'Unknown')}</small>${item.emailSubject ? `<small class="allocation-subject">${escapeHtml(item.emailSubject)}</small>` : ''}</div><div>${prettyDateTime(item.assignedAt)}</div><div>${escapeHtml(item.reference || 'No reference')}</div><div><span class="status success">Recorded</span></div></div>`).join('') : '<div class="empty-state">No assignments recorded today.</div>'}</div></section>`;
+}
+
+function renderAllocationTimelineItem(item) {
+  const recipient = state.members.find((member) => member.id === item.memberId)?.name || 'Unknown recipient';
+  const assigner = state.members.find((member) => member.id === item.assignedBy)?.name || 'Unknown assigner';
+  return `<div class="schedule-row allocation-row"><div><strong>${escapeHtml(recipient)}</strong><small style="display:block">Assigned by ${escapeHtml(assigner)}</small>${item.emailSubject ? `<small class="allocation-subject">${escapeHtml(item.emailSubject)}</small>` : ''}</div><div>${prettyDateTime(item.assignedAt)}</div><div>${escapeHtml(item.reference || 'No reference')}</div><div><span class="status success">Assigned</span></div></div>`;
 }
 
 function renderReports() {
@@ -389,10 +446,11 @@ function renderReports() {
   const approved = state.requests.filter((r) => r.status === 'approved').length;
   const rejected = state.requests.filter((r) => r.status === 'rejected').length;
   const attendance = (state.attendance || []).slice(0, 20);
+  const timeline = [...allocations].sort((a, b) => new Date(b.assignedAt) - new Date(a.assignedAt)).slice(0, 100);
   return `<div class="page-toolbar"><div><div class="panel-title">Operational reports</div><div class="panel-subtitle">Historical totals from records entered in WHO’S next</div></div><button class="button button-secondary" id="export-csv">↓ Export allocations CSV</button></div>
     <div class="report-grid"><div class="report-card"><small>Total assignments recorded</small><strong>${total}</strong></div><div class="report-card"><small>Requests approved</small><strong>${approved}</strong></div><div class="report-card"><small>Requests pending / rejected</small><strong>${pending} / ${rejected}</strong></div></div>
     <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Allocation distribution</div><div class="panel-subtitle">All recorded allocations, grouped by recipient</div></div></div><div class="schedule-list">${sorted.map((member) => `<div class="schedule-row"><div><strong>${escapeHtml(member.name)}</strong><small style="display:block">${member.id === currentMemberId ? 'You' : 'Team member'}</small></div><div>${member.count} allocation(s)</div><div><div style="height:7px;background:#283746;border-radius:99px;overflow:hidden"><div style="height:100%;width:${total ? member.count / Math.max(1, sorted[0].count) * 100 : 0}%;background:var(--accent);border-radius:99px"></div></div></div><div><span class="status muted">History</span></div></div>`).join('')}</div></section>
-    <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Recent attendance events</div><div class="panel-subtitle">Self-recorded shift check-in and check-out events · latest 20</div></div></div><div class="schedule-list">${attendance.length ? attendance.map((event) => `<div class="schedule-row"><div><strong>${escapeHtml(state.members.find((m) => m.id === event.memberId)?.name || 'Unknown member')}</strong></div><div>${event.eventType === 'check_in' ? 'Check-in' : 'Check-out'}</div><div>${prettyDateTime(event.occurredAt)}</div><div><span class="status muted">Recorded</span></div></div>`).join('') : '<div class="empty-state">No attendance events have been recorded yet.</div>'}</div></section>
+    <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Email assignment timeline</div><div class="panel-subtitle">Recipient, assigner, subject and exact recorded timestamp · latest 100</div></div></div><div class="schedule-list">${timeline.length ? timeline.map(renderAllocationTimelineItem).join('') : '<div class="empty-state">No email assignments have been recorded yet.</div>'}</div></section>\n    <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Recent attendance events</div><div class="panel-subtitle">Self-recorded shift check-in and check-out events · latest 20</div></div></div><div class="schedule-list">${attendance.length ? attendance.map((event) => `<div class="schedule-row"><div><strong>${escapeHtml(state.members.find((m) => m.id === event.memberId)?.name || 'Unknown member')}</strong></div><div>${event.eventType === 'check_in' ? 'Check-in' : 'Check-out'}</div><div>${prettyDateTime(event.occurredAt)}</div><div><span class="status muted">Recorded</span></div></div>`).join('') : '<div class="empty-state">No attendance events have been recorded yet.</div>'}</div></section>
     <section class="panel"><div class="panel-head"><div><div class="panel-title">Audit and handover history</div><div class="panel-subtitle">Recent operational events</div></div></div><div class="activity-list">${[...state.handovers.map((h) => ({ ...h, text: `${state.members.find((m) => m.id === h.fromMemberId)?.name || 'Unassigned'} handed allocation to ${state.members.find((m) => m.id === h.toMemberId)?.name || 'Unknown'}`, icon: '⇄' })), ...state.activities].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 20).map((item) => `<div class="activity-item"><span class="activity-icon">${escapeHtml(item.icon || '•')}</span><div class="activity-copy"><p>${escapeHtml(item.text)}</p><small>${prettyDateTime(item.createdAt)}</small></div></div>`).join('') || '<div class="empty-state">Audit events will appear here as the team uses the workspace.</div>'}</div></section>`;
 }
 
@@ -401,7 +459,8 @@ function bindViewActions() {
   $('#take-over')?.addEventListener('click', takeOver);
   $('#attendance-toggle')?.addEventListener('click', recordAttendance);
   $('#record-next')?.addEventListener('click', () => openAllocationDialog());
-  $('#add-break')?.addEventListener('click', openBreakDialog);
+  $('#add-break')?.addEventListener('click', () => openBreakDialog(false));
+  $('#extend-break')?.addEventListener('click', () => openBreakDialog(true));
   $('#set-shift')?.addEventListener('click', () => openShiftDialog());
   $('#new-shift-swap')?.addEventListener('click', openShiftSwapDialog);
   $$('[data-swap-response]').forEach((button) => button.addEventListener('click', () => respondShiftSwap(button.dataset.swapResponse, button.dataset.accept === 'true')));
@@ -448,30 +507,65 @@ function openShiftDialog(existingId = null) {
   $('#shift-preset')?.addEventListener('change', (event) => { const preset = SHIFT_PRESETS[event.target.value]; if (preset) { $('#shift-start').value = preset.start; $('#shift-end').value = preset.end; } });
 }
 
-function openBreakDialog() {
-  openDialog('Plan a break', 'A planned break removes you from the allocation queue only during its scheduled window.', `<div class="form-grid"><div class="field"><label for="break-date">Date</label><input id="break-date" name="date" type="date" required value="${localDate()}" /></div><div class="field"><label for="break-note">Break type / note</label><input id="break-note" name="note" maxlength="100" value="Scheduled break" required /></div><div class="field"><label for="break-start">Start</label><input id="break-start" name="start" type="time" required value="${localTime()}" /></div><div class="field"><label for="break-end">End</label><input id="break-end" name="end" type="time" required value="${localTime(addMinutes(new Date(), 30))}" /></div></div>`, 'Save break', async (form) => {
-    const item = { id: id(), memberId: currentMemberId, date: form.get('date'), start: form.get('start'), end: form.get('end'), note: form.get('note').trim() };
-    const error = validateTimeRange(item.start, item.end); if (error) throw new Error(error);
-    if (!isBreakWithinShift(item, state.shifts)) throw new Error('The break must fit inside one of your scheduled shifts. Add your shift first or adjust the break window.');
-    if (remoteMode) await rpc('add_break', { p_work_date: item.date, p_start: item.start, p_end: item.end, p_note: item.note });
-    else { state.breaks.push(item); logActivity(`${currentMember().name} planned a break for ${prettyDate(item.date)}.`, '◷'); saveDemoState(); }
-    await refreshAfterAction('Break saved.');
-  });
+function currentBreakForMember() {
+  const date = localDate();
+  const time = localTime();
+  const previousDate = new Date(`${date}T00:00:00Z`);
+  previousDate.setUTCDate(previousDate.getUTCDate() - 1);
+  const previous = previousDate.toISOString().slice(0, 10);
+  return state.breaks.find((item) => item.memberId === currentMemberId && (
+    (item.date === date && (item.start < item.end ? time >= item.start && time < item.end : time >= item.start)) ||
+    (item.date === previous && item.start > item.end && time < item.end)
+  )) || null;
+}
+
+function openBreakDialog(extension = false) {
+  const now = new Date();
+  const activeBreak = extension ? currentBreakForMember() : null;
+  let breakDate = localDate(now);
+  let breakStart = localTime(now);
+  let defaultEnd = localTime(addMinutes(now, 30));
+  if (activeBreak) {
+    breakDate = activeBreak.date;
+    if (activeBreak.start > activeBreak.end) {
+      const nextDate = new Date(`${activeBreak.date}T00:00:00Z`);
+      nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+      breakDate = nextDate.toISOString().slice(0, 10);
+    }
+    breakStart = activeBreak.end;
+    const extensionStart = new Date(workspaceInputToIso(`${breakDate}T${breakStart}`));
+    defaultEnd = localTime(addMinutes(extensionStart, 30));
+  }
+  openDialog(extension ? 'Extend your current break' : 'Plan a break',
+    extension ? 'The extension starts when your current break was due to end. You return to the queue when the extended window ends.' : 'A planned break removes you from the allocation queue only during its scheduled window.',
+    `<div class="form-grid"><div class="field"><label for="break-date">Date</label><input id="break-date" name="date" type="date" required value="${breakDate}" /></div><div class="field"><label for="break-note">Break type / note</label><input id="break-note" name="note" maxlength="100" value="${extension ? 'Break extension' : 'Scheduled break'}" required /></div><div class="field"><label for="break-start">Start</label><input id="break-start" name="start" type="time" required value="${breakStart}" /></div><div class="field"><label for="break-end">End</label><input id="break-end" name="end" type="time" required value="${defaultEnd}" /></div></div>`,
+    extension ? 'Extend break' : 'Save break', async (form) => {
+      const item = { id: id(), memberId: currentMemberId, date: form.get('date'), start: form.get('start'), end: form.get('end'), note: form.get('note').trim() };
+      const error = validateTimeRange(item.start, item.end); if (error) throw new Error(error);
+      if (!isBreakWithinShift(item, state.shifts)) throw new Error('The break must fit inside one of your scheduled shifts. Add your shift first or adjust the break window.');
+      if (remoteMode) await rpc('add_break', { p_work_date: item.date, p_start: item.start, p_end: item.end, p_note: item.note });
+      else { state.breaks.push(item); logActivity(`${currentMember().name} ${extension ? 'extended a break' : 'planned a break'} for ${prettyDate(item.date)}.`, '◷'); saveDemoState(); }
+      await refreshAfterAction(extension ? 'Break extended. You will return to the queue when the extension ends.' : 'Break saved.');
+    });
 }
 
 function openAllocationDialog() {
-  if (!isCurrentAssignee()) return toast('Only the current email assignee can record an allocation.', true);
+  if (!isCurrentAssignee()) return toast('Only the current shift assignee can record an allocation.', true);
   const queue = queueMembers();
   const target = queue[0];
   if (!target) return toast('No employee is currently eligible for allocation.', true);
-  openDialog('Record the next allocation', `The next eligible employee is ${target.name}. Complete the manual email assignment first, then record it here.`, `<div class="notice">Next in sequence: <strong>${escapeHtml(target.name)}</strong>. The rotation pointer advances after this record is saved.</div><div class="field"><label for="allocation-reference">Ticket / email reference (optional)</label><input id="allocation-reference" name="reference" maxlength="100" placeholder="e.g. INC0012345" /></div>`, 'Confirm allocation', async (form) => {
-    if (remoteMode) await rpc('record_next_allocation', { p_reference: form.get('reference').trim() || null });
+  openDialog('Record email assignment', `The next eligible colleague is ${target.name}. After you assign the email in Outlook, record it here. The queue advances immediately.`, `<div class="notice">Next recipient: <strong>${escapeHtml(target.name)}</strong>. Your name (${escapeHtml(currentMember().name)}) will be stored as the assigner.</div><div class="field"><label for="allocation-subject">Email subject (optional)</label><input id="allocation-subject" name="subject" maxlength="200" placeholder="e.g. VPN access issue - Bangalore team" /></div><div class="field" style="margin-top:12px"><label for="allocation-reference">Ticket / email reference (optional)</label><input id="allocation-reference" name="reference" maxlength="100" placeholder="e.g. INC0012345" /></div>`, 'Confirm assignment', async (form) => {
+    const subject = form.get('subject').trim();
+    const reference = form.get('reference').trim();
+    if (remoteMode) await rpc('record_next_allocation', { p_reference: reference || null, p_subject: subject || null });
     else {
-      const result = recordAllocation({ lastAllocatedMemberId: state.lastAllocatedMemberId }, domainMembers(), { id: id(), assignedBy: currentMemberId, assignedAt: new Date().toISOString(), reference: form.get('reference'), context: contextNow() });
-      state.lastAllocatedMemberId = result.state.lastAllocatedMemberId; state.allocations.unshift(result.allocation);
-      logActivity(`${currentMember().name} allocated the next email to ${target.name}.`, '⇄'); saveDemoState();
+      const result = recordAllocation({ lastAllocatedMemberId: state.lastAllocatedMemberId }, domainMembers(), { id: id(), assignedBy: currentMemberId, assignedAt: new Date().toISOString(), reference, emailSubject: subject, context: contextNow() });
+      state.lastAllocatedMemberId = result.state.lastAllocatedMemberId;
+      state.allocations.unshift(result.allocation);
+      logActivity(`${currentMember().name} assigned an email to ${target.name}${subject ? ` · ${subject}` : ''}.`, '⇄');
+      saveDemoState();
     }
-    await refreshAfterAction(`Allocation recorded for ${target.name}.`);
+    await refreshAfterAction(`Email assignment recorded for ${target.name}.`);
   });
 }
 
@@ -544,10 +638,10 @@ async function rpc(name, args) {
 }
 
 function exportAllocations() {
-  const rows = [['Recipient', 'Assigned by', 'Assigned at', 'Reference']];
+  const rows = [['Recipient', 'Assigned by', 'Email subject', 'Assigned at (ISO timestamp)', 'Reference']];
   for (const item of state.allocations) rows.push([
     state.members.find((m) => m.id === item.memberId)?.name || '',
-    state.members.find((m) => m.id === item.assignedBy)?.name || '', item.assignedAt, item.reference || '',
+    state.members.find((m) => m.id === item.assignedBy)?.name || '', item.emailSubject || '', item.assignedAt, item.reference || '',
   ]);
   const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
