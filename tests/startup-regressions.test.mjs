@@ -153,3 +153,26 @@ test('responsive header moves to a reserved grid before clock and actions can ov
   assert.match(styles, /@media\(max-width:1100px\)\{\s*\.topbar\{display:grid;/);
   assert.match(styles, /\.top-actions \.mobile-profile-toggle\{display:inline-flex/);
 });
+
+
+test('notification delivery retries audio unlock, resumes before playback, and avoids background-screen popups', async () => {
+  const notifications = await readFile(new URL('../site/src/notifications.mjs', import.meta.url), 'utf8');
+  assert.match(notifications, /document\.addEventListener\('pointerdown', unlockAudio, \{ capture: true, passive: true \}\)/);
+  assert.doesNotMatch(notifications, /pointerdown', unlockAudio, \{ once: true/);
+  assert.match(notifications, /if \(context\.state === 'suspended'\) await context\.resume\(\)/);
+  assert.match(notifications, /document\.visibilityState === 'visible' && document\.hasFocus\(\)/);
+  assert.match(notifications, /void playNotificationSound\(\)/);
+  assert.match(notifications, /notificationFetchQueued/);
+});
+
+test('reading a notification marks it read and closes the inbox', async () => {
+  const notifications = await readFile(new URL('../site/src/notifications.mjs', import.meta.url), 'utf8');
+  assert.match(notifications, /mark_my_notification_read/);
+  assert.match(notifications, /isOpen = false;\s+renderList\(\)/);
+});
+
+test('today allocation log is height-constrained and independently scrollable', () => {
+  assert.match(styles, /\.allocation-log \{[\s\S]*?max-height: min\(390px, 44vh\);[\s\S]*?overflow-y: auto/);
+  assert.match(styles, /\.allocation-log-head \{[\s\S]*?position: sticky;[\s\S]*?top: 0/);
+  assert.match(styles, /overscroll-behavior: contain/);
+});
