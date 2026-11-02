@@ -1,4 +1,5 @@
 [build]
+  command = "node scripts/generate-config.mjs"
   publish = "site"
 
 [[headers]]
