@@ -76,7 +76,7 @@ begin
     and not exists (
       select 1 from public.availability_requests r where r.workspace_id = v_workspace_id and r.member_id = m.id
         and r.status = 'approved' and r.start_at <= v_now and r.end_at > v_now
-        and (not p_existing_ticket or r.request_type = 'leave')
+        and (not p_existing_ticket or r.request_type not in ('technical','rdp','meeting'))
     )
   order by case when v_last_order is null or m.sort_order > v_last_order then 0 else 1 end, m.sort_order
   limit 1;
