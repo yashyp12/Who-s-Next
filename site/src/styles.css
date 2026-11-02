@@ -263,3 +263,24 @@
 .admin-member-main small{display:block;color:var(--muted);font-size:10px;margin-top:4px}
 .admin-member-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
 @media(max-width:720px){.admin-member-row{align-items:flex-start;flex-direction:column}.admin-member-actions{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.admin-member-actions .button{min-height:38px}}
+
+
+/* Production fix: keep the admin destination and top actions usable on narrow screens. */
+@media (max-width: 720px) {
+  .nav:has(button[data-view="admin"]) {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .top-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    row-gap: 8px;
+    min-width: 0;
+  }
+  .top-actions > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .top-actions .digital-clock {
+    margin-right: auto;
+  }
+}
