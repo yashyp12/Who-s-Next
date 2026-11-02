@@ -35,12 +35,12 @@ test('access-code submission shows a spinner and restores the button after failu
 
 
 test('workspace header centers the timer and orders top actions', () => {
- const header=app.match(/<header class="topbar">([\\s\\S]*?)<\\/header>/)?.[1]||'';
+ const header=app.slice(app.indexOf('<header class="topbar">'),app.indexOf('</header>'));
  assert.ok(header.indexOf('id="workspace-clock"')>header.indexOf('topbar-title-wrap'));
  assert.ok(header.indexOf('id="new-request-top"')<header.indexOf('id="refresh-workspace"'));
  assert.ok(header.indexOf('id="refresh-workspace"')<header.indexOf('class="notification-center"'));
  assert.ok(header.indexOf('class="notification-center"')<header.indexOf('class="live-pill"'));
- assert.match(styles,/grid-template-columns:238px minmax\\(0,1fr\\)/);
+ assert.match(styles,/position:absolute;left:50%;transform:translateX\(-50%\)/);
 });
 test('sidebar collapse and expand use smooth desktop and mobile transitions',()=>{
  assert.match(app,/id="sidebar-toggle" type="button" aria-expanded=/);
