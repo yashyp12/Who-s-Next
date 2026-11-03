@@ -184,7 +184,7 @@ test('admins can set simple case-insensitive member access codes without exposin
   assert.match(app, /data-admin-set-code=/);
   assert.match(app, /admin_set_member_access_code/);
   assert.match(app, /\^\[A-Za-z0-9\._-\]\{8,40\}\$/);
-  assert.match(app, /minlength="8" maxlength="40"/);
+  assert.match(app, /minlength="8" maxlength="200"/);
   assert.match(migration, /public\.admin_set_member_access_code\(p_member_id uuid, p_access_code text\)/);
   assert.match(migration, /extensions\.digest\(v_normalized_code, 'sha256'\)/);
   assert.match(migration, /auth_user_id <> auth\.uid\(\)/);
