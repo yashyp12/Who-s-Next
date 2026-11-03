@@ -150,7 +150,7 @@ npm run serve
 
 Open <http://localhost:4173>.
 
-Without a configured Supabase project, the application runs in local demo mode with browser-local sample data. Demo data is not shared across browsers and must not be treated as production data.
+Without a configured Supabase project, the application displays a setup state and does not fabricate live members or assignments. A configured workspace is required to use the shared operational features.
 
 ## Configure Supabase
 
@@ -175,7 +175,7 @@ For a shared workspace, create a Supabase project and configure it before deploy
 
 Only the public project URL and publishable/anon key belong in browser code. **Never place a Supabase service-role key, database password, private API key, or real member access code in the frontend or Git.**
 
-If the application has no public Supabase configuration, it does not create fake live members or allocations; it displays the local demo experience or setup state as implemented.
+If the application has no public Supabase configuration, it displays a setup state and does not create fake live members or allocations.
 
 ## Database migrations and seed data
 
