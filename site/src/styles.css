@@ -601,3 +601,27 @@
 @media(max-width:720px) {
   .allocation-log { max-height: min(340px, 42vh); }
 }
+
+
+/* Consistent, accessible confirmation and input dialogs */
+.utility-dialog { width: min(520px, calc(100vw - 28px)); padding: 0; overflow: hidden; }
+.utility-dialog::backdrop { background: rgba(3, 8, 14, .76); backdrop-filter: blur(8px); }
+.utility-dialog-body { padding: 26px; }
+.utility-dialog-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin:8px 0 8px; }
+.utility-dialog-heading h2 { margin:0; font:800 22px/1.2 Manrope, sans-serif; letter-spacing:-.035em; }
+.utility-dialog-description { color:var(--muted); font-size:13px; line-height:1.65; margin:0 0 22px; }
+.utility-dialog-field { margin-top:20px; }
+.utility-dialog-input-row { display:flex; align-items:center; gap:9px; }
+.utility-dialog-input-row input { min-width:0; flex:1; }
+.utility-dialog-help { display:block; color:var(--muted); font-size:11px; line-height:1.5; margin-top:8px; }
+.utility-dialog-error { display:block; color:#ff8b8b; font-size:11px; min-height:16px; margin-top:5px; }
+.utility-dialog input[aria-invalid="true"] { border-color:#ff7777; box-shadow:0 0 0 3px rgba(255,100,100,.12); }
+.utility-dialog .dialog-footer { margin-top:24px; }
+.utility-dialog .dialog-footer .button { min-width:120px; }
+@media (max-width:600px) {
+  .utility-dialog { width:calc(100vw - 20px); max-height:calc(100dvh - 20px); border-radius:18px; }
+  .utility-dialog-body { padding:22px 18px 18px; }
+  .utility-dialog-heading h2 { font-size:19px; }
+  .utility-dialog .dialog-footer { display:grid; grid-template-columns:1fr 1fr; }
+  .utility-dialog .dialog-footer .button { width:100%; min-width:0; }
+}
