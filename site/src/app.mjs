@@ -324,17 +324,37 @@ async function joinWorkspace(event) {
   }
 }
 
+function shiftForMember(memberId, date = localDate()) {
+  const todayShift = state.shifts.find((item) => item.memberId === memberId && item.date === date);
+  if (todayShift) return todayShift;
+  const previous = addCalendarDays(date, -1);
+  const overnight = state.shifts.find((item) => item.memberId === memberId && item.date === previous && item.end <= item.start);
+  return overnight && localTime() < overnight.end ? overnight : null;
+}
+
 function domainMembers() {
-  const today = localDate();
-  return state.members.map((member) => {
-    let shift = state.shifts.find((item) => item.memberId === member.id && item.date === today) || member.shift;
-    if (!shift) {
-      const previous = new Date(`${today}T00:00:00Z`); previous.setUTCDate(previous.getUTCDate() - 1);
-      const prev = previous.toISOString().slice(0, 10);
-      shift = state.shifts.find((item) => item.memberId === member.id && item.date === prev && item.start > item.end) || null;
-    }
-    return { ...member, shift, breaks: state.breaks.filter((item) => item.memberId === member.id), requests: state.requests.filter((item) => item.memberId === member.id) };
-  });
+  return state.members.map((member) => ({
+    ...member,
+    shift: shiftForMember(member.id),
+    breaks: state.breaks.filter((item) => item.memberId === member.id),
+    requests: state.requests.filter((item) => item.memberId === member.id),
+  }));
+}
+
+function isCurrentWorkspaceDay(value) {
+  return Boolean(value) && localDate(new Date(value)) === localDate();
+}
+
+function visibleMemberRequests() {
+  if (currentIsAdmin) return state.requests;
+  const now = Date.now();
+  return state.requests.filter((request) => request.status === 'pending'
+    || (request.status === 'approved' && new Date(request.endAt).getTime() > now)
+    || isCurrentWorkspaceDay(request.createdAt));
+}
+
+function visibleMemberAllocations() {
+  return currentIsAdmin ? state.allocations : state.allocations.filter((item) => isCurrentWorkspaceDay(item.assignedAt));
 }
 
 function currentMember() { return state?.members.find((member) => member.id === currentMemberId) || null; }
@@ -640,13 +660,14 @@ function renderRequestCard(request) {
 }
 
 function renderSchedule(me) {
-  const shifts = state.shifts.filter((shift) => shift.memberId === currentMemberId).sort((a, b) => a.date.localeCompare(b.date));
-  const breaks = state.breaks.filter((item) => item.memberId === currentMemberId).sort((a, b) => `${a.date}${a.start}`.localeCompare(`${b.date}${b.start}`));
+  const floorDate = addCalendarDays(localDate(), -1);
+  const shifts = state.shifts.filter((shift) => shift.memberId === currentMemberId && (currentIsAdmin || shift.date >= floorDate)).sort((a, b) => a.date.localeCompare(b.date));
+  const breaks = state.breaks.filter((item) => item.memberId === currentMemberId && (currentIsAdmin || item.date >= floorDate)).sort((a, b) => `${a.date}${a.start}`.localeCompare(`${b.date}${b.start}`));
   return `<div class="page-toolbar"><div><div class="panel-title">Your shifts & breaks</div><div class="panel-subtitle">Manage only your own schedule. Changes are retained in history.</div></div><div class="toolbar-actions"><button class="button button-secondary" id="add-break">＋ Add break</button><button class="button button-secondary" id="new-shift-swap">⇄ Request swap</button><button class="button button-primary" id="set-shift">＋ Set shift</button></div></div>
     <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Scheduled shifts</div><div class="panel-subtitle">${shifts.length} shift record(s)</div></div></div><div class="schedule-list">${shifts.length ? shifts.map((shift) => `<div class="schedule-row"><div><strong>${prettyDate(shift.date)}</strong><small style="display:block">${escapeHtml(SHIFT_PRESETS[shift.key]?.label || shift.key || 'Custom shift')}</small></div><div>${shift.start}</div><div>${shift.end}</div><div><button class="button button-secondary button-small" data-edit-shift="${shift.id}">Edit</button></div></div>`).join('') : '<div class="empty-state">No shifts have been entered. Add your first shift to appear in the team schedule.</div>'}</div></section>
     <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Planned breaks</div><div class="panel-subtitle">60 minutes total per shift. Additional time needs SME or Super Admin approval.</div></div></div><div class="schedule-list">${breaks.length ? breaks.map((item) => `<div class="schedule-row"><div><strong>${prettyDate(item.date)}</strong><small style="display:block">${item.breakType === 'meal' ? 'Meal break' : 'BioBreak'} · ${escapeHtml(item.note || 'Scheduled break')}</small></div><div>${item.start}</div><div>${item.end}</div><div><span class="status muted">Scheduled</span></div></div>`).join('') : '<div class="empty-state">No breaks planned yet.</div>'}</div></section>
-    <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">My availability requests</div><div class="panel-subtitle">Edit pending requests or withdraw your own pending and active approved requests. Reviewed history stays visible.</div></div><button class="button button-primary button-small" id="new-request-profile">＋ New request</button></div><div class="request-list">${state.requests.filter((request) => request.memberId === currentMemberId).sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt)).length ? state.requests.filter((request) => request.memberId === currentMemberId).sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt)).map(renderOwnAvailabilityRequestCard).join('') : '<div class="empty-state">You have not submitted any availability requests.</div>'}</div></section>
-    <section class="panel"><div class="panel-head"><div><div class="panel-title">One-day shift swaps</div><div class="panel-subtitle">A swap takes effect only after the invited colleague accepts</div></div></div><div class="request-list">${(state.shiftSwaps || []).filter((swap) => swap.requesterMemberId === currentMemberId || swap.partnerMemberId === currentMemberId).length ? (state.shiftSwaps || []).filter((swap) => swap.requesterMemberId === currentMemberId || swap.partnerMemberId === currentMemberId).map(renderShiftSwapCard).join('') : '<div class="empty-state">No shift swap requests involving you.</div>'}</div></section>`;
+    <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">My availability requests</div><div class="panel-subtitle">Edit pending requests or withdraw your own pending and active approved requests. Old reviewed history is retained for Super Admin / SME.</div></div><button class="button button-primary button-small" id="new-request-profile">＋ New request</button></div><div class="request-list">${visibleMemberRequests().filter((request) => request.memberId === currentMemberId).sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt)).length ? visibleMemberRequests().filter((request) => request.memberId === currentMemberId).sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt)).map(renderOwnAvailabilityRequestCard).join('') : '<div class="empty-state">You have not submitted any availability requests.</div>'}</div></section>
+    <section class="panel"><div class="panel-head"><div><div class="panel-title">One-day shift swaps</div><div class="panel-subtitle">A swap takes effect only after the invited colleague accepts</div></div></div><div class="request-list">${(state.shiftSwaps || []).filter((swap) => (swap.requesterMemberId === currentMemberId || swap.partnerMemberId === currentMemberId) && (currentIsAdmin || swap.status === 'pending' || swap.workDate >= localDate())).length ? (state.shiftSwaps || []).filter((swap) => (swap.requesterMemberId === currentMemberId || swap.partnerMemberId === currentMemberId) && (currentIsAdmin || swap.status === 'pending' || swap.workDate >= localDate())).map(renderShiftSwapCard).join('') : '<div class="empty-state">No shift swap requests involving you.</div>'}</div></section>`;
 }
 
 function renderShiftSwapCard(swap) {
@@ -658,7 +679,7 @@ function renderShiftSwapCard(swap) {
 }
 
 function renderRequests(me) {
-  const sorted = [...state.requests].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const sorted = [...visibleMemberRequests()].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   const pending = sorted.filter((r) => r.status === 'pending');
   const mine = sorted.filter((r) => r.memberId === currentMemberId);
   const canReview = isCurrentAssignee();
@@ -671,7 +692,7 @@ function renderRequests(me) {
 
 function renderAllocation(me, assignee) {
   const queue = queueMembers();
-  const today = state.allocations.filter((item) => localDate(new Date(item.assignedAt)) === localDate());
+  const today = visibleMemberAllocations().filter((item) => isCurrentWorkspaceDay(item.assignedAt));
   const myStatus = getMemberStatus(domainMembers().find((member) => member.id === currentMemberId), contextNow());
   return `<div class="page-toolbar"><div><div class="panel-title">Round-robin queue</div><div class="panel-subtitle">Unavailable colleagues automatically return to the queue when their break or approved time window ends.</div></div><div class="toolbar-actions"><button class="button button-secondary" id="take-over" ${isCurrentAssignee() ? 'disabled' : ''}>Take over responsibility</button><button class="button button-secondary" id="record-ticket" ${isCurrentAssignee() ? '' : 'disabled'}>Route existing ticket</button><button class="button button-primary" id="record-next" ${queue.length && isCurrentAssignee() ? '' : 'disabled'}>Record new email →</button></div></div>${myStatus.code === 'break' ? `<section class="break-active-card"><div><small>ACTIVE BREAK · ALLOCATION PAUSED</small><strong>${escapeHtml(myStatus.label)}</strong><p>Back in the queue at ${prettyTime(myStatus.returnAt)}</p></div><div class="break-countdown-wrap"><strong id="break-countdown">--:--:--</strong><small>TIME REMAINING</small></div></section>` : ''}
     <div class="notice">Assign the email in Outlook first, then record it here. WHO'S next captures the recipient, assigner, optional subject/reference and exact server timestamp. The next colleague becomes first in line immediately after the record succeeds.</div>
@@ -837,17 +858,18 @@ function openAdminShiftDialog(memberId) {
 }
 
 function renderReports() {
-  const allocations = state.allocations;
+  const allocations = visibleMemberAllocations();
   const allMembers = state.members;
   const totals = allMembers.map((member) => ({ ...member, count: allocations.filter((a) => a.memberId === member.id).length }));
   const sorted = [...totals].sort((a, b) => b.count - a.count);
   const total = allocations.length;
-  const pending = state.requests.filter((r) => r.status === 'pending').length;
-  const approved = state.requests.filter((r) => r.status === 'approved').length;
-  const rejected = state.requests.filter((r) => r.status === 'rejected').length;
-  const attendance = (state.attendance || []).slice(0, 20);
+  const visibleRequests = visibleMemberRequests();
+  const pending = visibleRequests.filter((r) => r.status === 'pending').length;
+  const approved = visibleRequests.filter((r) => r.status === 'approved').length;
+  const rejected = visibleRequests.filter((r) => r.status === 'rejected').length;
+  const attendance = (state.attendance || []).filter((item) => currentIsAdmin || isCurrentWorkspaceDay(item.occurredAt)).slice(0, 20);
   const timeline = [...allocations].sort((a, b) => new Date(b.assignedAt) - new Date(a.assignedAt)).slice(0, 100);
-  return `<div class="page-toolbar"><div><div class="panel-title">Operational reports</div><div class="panel-subtitle">Historical totals from records entered in WHO’S next</div></div><button class="button button-secondary" id="export-csv">↓ Export allocations CSV</button></div>
+  return `<div class="page-toolbar"><div><div class="panel-title">Operational reports</div><div class="panel-subtitle">${currentIsAdmin ? 'Historical totals from records entered in WHO’S next' : 'Current workspace-day activity'}</div></div><button class="button button-secondary" id="export-csv">↓ Export allocations CSV</button></div>
     <div class="report-grid"><div class="report-card"><small>Total assignments recorded</small><strong>${total}</strong></div><div class="report-card"><small>Requests approved</small><strong>${approved}</strong></div><div class="report-card"><small>Requests pending / rejected</small><strong>${pending} / ${rejected}</strong></div></div>
     <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Allocation distribution</div><div class="panel-subtitle">All recorded allocations, grouped by recipient</div></div></div><div class="schedule-list">${sorted.map((member) => `<div class="schedule-row"><div><strong>${escapeHtml(member.name)}</strong><small style="display:block">${member.id === currentMemberId ? 'You' : 'Team member'}</small></div><div>${member.count} allocation(s)</div><div><div style="height:7px;background:#283746;border-radius:99px;overflow:hidden"><div style="height:100%;width:${total ? member.count / Math.max(1, sorted[0].count) * 100 : 0}%;background:var(--accent);border-radius:99px"></div></div></div><div><span class="status muted">History</span></div></div>`).join('')}</div></section>
     <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Email assignment timeline</div><div class="panel-subtitle">Recipient, assigner, subject and exact recorded timestamp · latest 100</div></div></div><div class="schedule-list">${timeline.length ? timeline.map(renderAllocationTimelineItem).join('') : '<div class="empty-state">No email assignments have been recorded yet.</div>'}</div></section>\n    <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Recent attendance events</div><div class="panel-subtitle">Self-recorded shift check-in and check-out events · latest 20</div></div></div><div class="schedule-list">${attendance.length ? attendance.map((event) => `<div class="schedule-row"><div><strong>${escapeHtml(state.members.find((m) => m.id === event.memberId)?.name || 'Unknown member')}</strong></div><div>${event.eventType === 'check_in' ? 'Check-in' : 'Check-out'}</div><div>${prettyDateTime(event.occurredAt)}</div><div><span class="status muted">Recorded</span></div></div>`).join('') : '<div class="empty-state">No attendance events have been recorded yet.</div>'}</div></section>
