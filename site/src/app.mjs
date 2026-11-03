@@ -247,7 +247,8 @@ function startPresenceTracking() {
   presenceTimer = window.setInterval(syncPresence, 20000);
   presenceRefreshTimer = window.setInterval(() => {
     refreshPresence().catch((error) => console.warn('Presence reconciliation failed:', error));
-  }, 20000);  hourlyReconcileTimer = window.setInterval(() => {
+  }, 20000);
+  hourlyReconcileTimer = window.setInterval(() => {
     reloadRemote().catch((error) => console.warn('Hourly workspace reconciliation failed:', error));
   }, 60 * 60 * 1000);
 }
@@ -496,7 +497,8 @@ function scheduleOperationalRefresh() {
   const boundary = nextOperationalBoundary();
   if (!boundary) return;
   const delay = Math.max(1000, boundary - Date.now() + 500);
-  boundaryTimer = setTimeout(async () => {    const reminder = (state.breaks || []).find((item) => {
+  boundaryTimer = setTimeout(async () => {
+    const reminder = (state.breaks || []).find((item) => {
       const startAt = new Date(workspaceInputToIso(`${item.date}T${item.start}`)).getTime();
       return startAt > Date.now() && startAt - Date.now() <= 5 * 60000 + 3000 && startAt - Date.now() >= 4 * 60000;
     });
@@ -759,7 +761,8 @@ async function saveAdminRole(memberId) {
   if (!member) return;
   const label = role === 'super_admin' ? 'Super Admin' : role === 'sme' ? 'SME' : 'regular member';
   if (!window.confirm(`Set ${member.name} as ${label}? Super Admin and SME have identical workspace permissions.`)) return;
-  try {    const { error } = await supabase.rpc('admin_set_member_role', { p_member_id: memberId, p_role: role });
+  try {
+    const { error } = await supabase.rpc('admin_set_member_role', { p_member_id: memberId, p_role: role });
     if (error) throw error;
     await loadAdminRoster();
     toast(`${member.name} access updated.`);
@@ -1008,7 +1011,8 @@ function openAllocationDialog(existingTicket = false) {
   if (!target) return toast('No employee is currently eligible for allocation.', true);
   openDialog(existingTicket ? 'Route existing ticket' : 'Record new email', `The next eligible colleague is ${target.name}. ${existingTicket ? 'Existing tickets may be routed to colleagues in troubleshooting or meeting status.' : 'Only available colleagues can receive a new email.'} The queue advances immediately.`, `<div class="notice">Next recipient: <strong>${escapeHtml(target.name)}</strong>. Your name (${escapeHtml(currentMember().name)}) will be stored as the assigner.</div><div class="field"><label for="allocation-subject">Email subject (optional)</label><input id="allocation-subject" name="subject" maxlength="200" placeholder="e.g. VPN access issue - Bangalore team" /></div><div class="field" style="margin-top:12px"><label for="allocation-reference">Ticket / email reference (optional)</label><input id="allocation-reference" name="reference" maxlength="100" placeholder="e.g. INC0012345" /></div>`, 'Confirm assignment', async (form) => {
     const subject = form.get('subject').trim();
-    const reference = form.get('reference').trim();    if (remoteMode) await rpc('record_next_allocation', { p_reference: reference || null, p_subject: subject || null, p_existing_ticket: existingTicket });
+    const reference = form.get('reference').trim();
+    if (remoteMode) await rpc('record_next_allocation', { p_reference: reference || null, p_subject: subject || null, p_existing_ticket: existingTicket });
     else {
       const result = recordAllocation({ lastAllocatedMemberId: state.lastAllocatedMemberId }, domainMembers(), { id: id(), assignedBy: currentMemberId, assignedAt: new Date().toISOString(), reference, emailSubject: subject, context: contextNow() });
       state.lastAllocatedMemberId = result.state.lastAllocatedMemberId;
