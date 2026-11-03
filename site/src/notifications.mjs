@@ -7,6 +7,7 @@ let soundEnabled = true;
 let audioContext = null;
 let root = null;
 let initialLoadComplete = false;
+let dismissHandlersBound = false;
 let pollTimer = null;
 let notificationFetchInProgress = false;
 const seenNotificationIds = new Set();
@@ -68,8 +69,8 @@ async function playNotificationSound() {
     oscillator.frequency.setValueAtTime(880, now + 0.13);
     oscillator.frequency.setValueAtTime(990, now + 0.26);
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.11, now + 0.018);
-    gain.gain.setValueAtTime(0.075, now + 0.12);
+    gain.gain.exponentialRampToValueAtTime(0.22, now + 0.018);
+    gain.gain.setValueAtTime(0.15, now + 0.12);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.39);
     oscillator.connect(gain);
     gain.connect(context.destination);
@@ -127,7 +128,7 @@ function renderList() {
     ${isOpen ? `<section class="notification-popover" aria-label="Notifications">
       <div class="notification-popover-head">
         <div><strong>Notifications</strong><small>${unread} unread</small></div>
-        <button type="button" class="text-link" id="notification-sound" aria-pressed="${soundEnabled}">Sound ${soundEnabled ? 'on' : 'off'}</button>
+        <div class="notification-popover-actions"><button type="button" class="text-link" id="notification-sound" aria-pressed="${soundEnabled}">Sound ${soundEnabled ? 'on' : 'off'}</button><button type="button" class="notification-popover-close" id="notification-close" aria-label="Close notifications" title="Close">×</button></div>
       </div>
       <div class="notification-items">
         ${notifications.length ? notifications.map((item) => `
@@ -137,6 +138,10 @@ function renderList() {
           </button>`).join('') : '<div class="empty-state">You’re all caught up.</div>'}
       </div>
     </section>` : ''}`;
+  root.querySelector('#notification-close')?.addEventListener('click', () => {
+    isOpen = false;
+    renderList();
+  });
   root.querySelector('#notification-trigger')?.addEventListener('click', () => {
     isOpen = !isOpen;
     renderList();
@@ -270,6 +275,21 @@ export function initializeNotificationCenter({ supabase, memberId }) {
       unlockAudio();
       loadNotifications({ notify: true }).catch((error) => console.error('Notification refresh failed:', error));
     });
+  }
+  if (!dismissHandlersBound) {
+    document.addEventListener('pointerdown', (event) => {
+      if (isOpen && root && !root.contains(event.target)) {
+        isOpen = false;
+        renderList();
+      }
+    }, true);
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && isOpen) {
+        isOpen = false;
+        renderList();
+      }
+    });
+    dismissHandlersBound = true;
   }
   const topActions = document.querySelector('.top-actions');
   if (!topActions) return;
