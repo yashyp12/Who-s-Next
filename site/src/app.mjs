@@ -950,7 +950,7 @@ function bindViewActions() {
   $$('[data-review]').forEach((button) => button.addEventListener('click', () => reviewRequest(button.dataset.review, button.dataset.decision)));
   $$('[data-edit-shift]').forEach((button) => button.addEventListener('click', () => openShiftDialog(button.dataset.editShift)));
   $('#export-csv')?.addEventListener('click', exportAllocations);
-  $('[data-filter-target]').forEach((input) => input.addEventListener('input', () => {
+  $$('[data-filter-target]').forEach((input) => input.addEventListener('input', () => {
     const panel = input.closest('.panel') || input.parentElement;
     const selector = input.dataset.filterTarget;
     panel.querySelectorAll(selector).forEach((item) => { item.hidden = !item.textContent.toLocaleLowerCase().includes(input.value.trim().toLocaleLowerCase()); });
