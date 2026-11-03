@@ -579,7 +579,7 @@ function openUtilityDialog({ title, description = '', field = null, confirmLabel
     content.innerHTML = `
       <div class="utility-dialog-body">
         <div class="eyebrow">${escapeHtml(eyebrow)}</div>
-        <div class="utility-dialog-heading"><h2>${escapeHtml(title)}</h2><button class="icon-button" type="button" id="utility-dialog-close" aria-label="Close dialog">×</button></div>
+        <div class="utility-dialog-heading"><h2 id="utility-dialog-title">${escapeHtml(title)}</h2><button class="icon-button" type="button" id="utility-dialog-close" aria-label="Close dialog">×</button></div>
         ${description ? `<p class="utility-dialog-description">${escapeHtml(description)}</p>` : ''}
         <form id="utility-dialog-form" novalidate>
           ${fieldMarkup}
