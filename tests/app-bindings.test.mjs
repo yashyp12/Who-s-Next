@@ -14,7 +14,7 @@ test('navigation buttons are selected as a collection before iteration', () => {
 
 test('admin control collections use querySelectorAll before iteration', () => {
   assert.ok(bindingSource, 'bindViewActions must exist');
-  for (const selector of ['[data-admin-rotate]', '[data-admin-toggle]', '[data-admin-name]', '[data-admin-shift]']) {
+  for (const selector of ['[data-admin-set-code]', '[data-admin-toggle]', '[data-admin-name]', '[data-admin-shift]']) {
     assert.ok(bindingSource.includes(`document.querySelectorAll('${selector}')`), `Expected a collection selector for ${selector}`);
   }
 });
