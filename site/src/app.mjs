@@ -425,6 +425,7 @@ function renderApp() {
   $('#demo-profile')?.addEventListener('change', (event) => { currentMemberId = event.target.value; localStorage.setItem(PROFILE_KEY, currentMemberId); renderApp(); });
   bindViewActions();
   if (currentIsAdmin && activeView === 'admin' && remoteMode && !adminRosterLoaded) loadAdminRoster();
+  if (currentIsAdmin && activeView === 'reports' && remoteMode && !adminAnalytics) loadAdminAnalytics(adminAnalyticsMonth || localDate().slice(0,7));
   startWorkspaceClock();
   scheduleOperationalRefresh();
   if (remoteMode && !state.shifts.some((shift) => shift.memberId === currentMemberId) && !sessionStorage.getItem(`whos-next-shift-setup-${currentMemberId}`)) {
@@ -849,6 +850,33 @@ function monthRange(value) {
   const start = new Date(Date.UTC(year, month - 1, 1));
   const end = new Date(Date.UTC(year, month, 1));
   return { start: start.toISOString().slice(0,10), end: end.toISOString().slice(0,10) };
+}
+
+async function loadAdminAnalytics(month) {
+  if (!currentIsAdmin || !remoteMode || !/^\\d{4}-\\d{2}$/.test(month)) return;
+  adminAnalyticsMonth = month;
+  adminAnalytics = null;
+  const range = monthRange(month);
+  const panel = $('#view-reports');
+  if (panel) panel.innerHTML = renderAdminAnalytics();
+  try {
+    const { data, error } = await supabase.rpc('admin_get_monthly_analytics', {
+      p_start_date: range.start,
+      p_end_date: range.end,
+    });
+    if (error) throw error;
+    adminAnalytics = data || null;
+    if (activeView === 'reports') {
+      const current = $('#view-reports');
+      if (current) current.innerHTML = renderAdminAnalytics();
+      bindViewActions();
+    }
+  } catch (error) {
+    adminAnalytics = null;
+    const current = $('#view-reports');
+    if (current) current.innerHTML = `<section class="panel"><div class="empty-state">Monthly analytics could not be loaded: ${escapeHtml(error.message || 'Unknown error')}. Apply the analytics database migration and try again.</div><button class="button button-secondary" id="analytics-retry">Retry</button></section>`;
+    $('#analytics-retry')?.addEventListener('click', () => loadAdminAnalytics(month));
+  }
 }
 
 function renderMiniLineChart(days = []) {
