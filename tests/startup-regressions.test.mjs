@@ -204,3 +204,35 @@ test('notification inbox can be dismissed without reopening the bell and Escape 
   assert.match(styles, /\.notification-popover-close/);
   assert.match(notifications, /exponentialRampToValueAtTime\(0\.22/);
 });
+
+
+test('admin monthly analytics uses a secured database aggregate and renders visual productivity charts', async () => {
+  const app = await readFile(new URL('../site/src/app.mjs', import.meta.url), 'utf8');
+  const migration = await readFile(new URL('../supabase/migrations/202611030015_admin_monthly_analytics.sql', import.meta.url), 'utf8');
+  assert.match(app, /admin_get_monthly_analytics/);
+  assert.match(app, /renderMiniLineChart/);
+  assert.match(app, /analytics-donut/);
+  assert.match(app, /Agent-wise productivity/);
+  assert.match(app, /not ticket closures or SLA completion/);
+  assert.match(migration, /public\.is_workspace_admin\(\)/);
+  assert.match(migration, /p_start_date date/);
+  assert.match(migration, /p_end_date date/);
+  assert.match(migration, /from public\.allocations a/);
+  assert.match(migration, /grant execute on function public\.admin_get_monthly_analytics/);
+  assert.match(migration, /limit 1500/);
+});
+
+test('long operational lists expose search controls and contained scroll areas', async () => {
+  const app = await readFile(new URL('../site/src/app.mjs', import.meta.url), 'utf8');
+  const styles = await readFile(new URL('../site/src/styles.css', import.meta.url), 'utf8');
+  assert.match(app, /data-filter-target=/);
+  assert.match(app, /Search monthly allocation records/);
+  assert.match(app, /Search request history/);
+  assert.match(styles, /\.schedule-list,.request-list,.queue-list,.activity-list,.allocation-log/);
+  assert.match(styles, /overscroll-behavior:contain/);
+  assert.match(styles, /scrollbar-color:#425365/);
+});
+
+test('live workspace status banner is removed from the sidebar', () => {
+  assert.doesNotMatch(app, /Live team workspace<br\/>Changes sync across browsers/);
+});
