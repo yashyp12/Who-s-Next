@@ -119,6 +119,7 @@
 .notification-popover-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 16px;border-bottom:1px solid var(--line)}
 .notification-popover-head strong{display:block;font:700 13px Manrope}
 .notification-popover-head small{display:block;color:var(--muted);font-size:10px;margin-top:4px}
+.notification-popover-actions{display:flex;align-items:center;gap:12px}.notification-popover-close{display:grid;place-items:center;width:30px;height:30px;border:1px solid var(--line);border-radius:9px;background:var(--surface-2);color:var(--text);font-size:20px;line-height:1}.notification-popover-close:hover{background:var(--surface-3);border-color:#718397}
 .notification-items{overflow:auto;padding:7px;display:grid;gap:5px}
 .notification-item{width:100%;display:flex;align-items:flex-start;gap:10px;padding:11px;border:1px solid transparent;border-radius:10px;background:transparent;color:var(--text);text-align:left}
 .notification-item:hover{background:#ffffff08}
