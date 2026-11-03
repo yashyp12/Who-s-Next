@@ -204,3 +204,11 @@ test('notification inbox can be dismissed without reopening the bell and Escape 
   assert.match(styles, /\.notification-popover-close/);
   assert.match(notifications, /exponentialRampToValueAtTime\(0\.22/);
 });
+
+
+test('access-code login accepts the admin-managed minimum length of eight characters', async () => {
+  const app = await readFile(new URL('../site/src/app.mjs', import.meta.url), 'utf8');
+  assert.match(app, /minlength="8"/);
+  assert.match(app, /code\.length < 8/);
+  assert.doesNotMatch(app, /code\.length < 16/);
+});
