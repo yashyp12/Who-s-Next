@@ -556,9 +556,13 @@ function openUtilityDialog({ title, description = '', field = null, confirmLabel
 
   return new Promise((resolve) => {
     let settled = false;
+    const onCancel = (event) => { event.preventDefault(); finish({ confirmed: false, value: '' }); };
+    const onClose = () => { if (!settled) { settled = true; resolve({ confirmed: false, value: '' }); } };
     const finish = (result) => {
       if (settled) return;
       settled = true;
+      dialog.removeEventListener('cancel', onCancel);
+      dialog.removeEventListener('close', onClose);
       if (dialog.open) dialog.close();
       resolve(result);
     };
@@ -589,8 +593,8 @@ function openUtilityDialog({ title, description = '', field = null, confirmLabel
     const form = $('#utility-dialog-form');
     $('#utility-dialog-close').addEventListener('click', () => finish({ confirmed: false, value: '' }));
     $('#utility-dialog-cancel')?.addEventListener('click', () => finish({ confirmed: false, value: '' }));
-    dialog.addEventListener('cancel', (event) => { event.preventDefault(); finish({ confirmed: false, value: '' }); }, { once: true });
-    dialog.addEventListener('close', () => { if (!settled) { settled = true; resolve({ confirmed: false, value: '' }); } }, { once: true });
+    dialog.addEventListener('cancel', onCancel);
+    dialog.addEventListener('close', onClose);
     $('#utility-dialog-copy')?.addEventListener('click', async () => {
       if (!input) return;
       try {
@@ -616,8 +620,8 @@ function openUtilityDialog({ title, description = '', field = null, confirmLabel
           return;
         }
       }
-      if (input && field?.required && !value.trim()) {
-        if (error) error.textContent = 'This field is required.';
+      if (input && !input.checkValidity()) {
+        if (error) error.textContent = input.validationMessage || 'Check this value and try again.';
         input.setAttribute('aria-invalid', 'true');
         input.focus();
         return;
