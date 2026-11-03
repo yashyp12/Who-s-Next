@@ -548,11 +548,97 @@ async function maybeAutoCheckIn() {
   }
 }
 
+
+function openUtilityDialog({ title, description = '', field = null, confirmLabel = 'Continue', cancelLabel = 'Cancel', danger = false, copyValue = null, eyebrow = 'WHO’S next · Confirmation' }) {
+  const dialog = $('#utility-dialog');
+  const content = $('#utility-dialog-content');
+  if (!dialog || !content) return Promise.resolve({ confirmed: false, value: '' });
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      if (dialog.open) dialog.close();
+      resolve(result);
+    };
+    const fieldMarkup = field ? `
+      <div class="field utility-dialog-field">
+        <label for="utility-dialog-input">${escapeHtml(field.label)}</label>
+        <div class="utility-dialog-input-row">
+          <input id="utility-dialog-input" name="value" type="${field.type || 'text'}" value="${escapeAttr(field.value ?? '')}" ${field.placeholder ? `placeholder="${escapeAttr(field.placeholder)}"` : ''} ${field.maxLength ? `maxlength="${Number(field.maxLength)}"` : ''} ${field.minLength ? `minlength="${Number(field.minLength)}"` : ''} ${field.pattern ? `pattern="${escapeAttr(field.pattern)}"` : ''} ${field.required ? 'required' : ''} ${field.readOnly ? 'readonly' : ''} autocomplete="off" />
+          ${copyValue !== null ? '<button class="button button-secondary button-small" type="button" id="utility-dialog-copy">Copy</button>' : ''}
+        </div>
+        ${field.help ? `<small class="utility-dialog-help">${escapeHtml(field.help)}</small>` : ''}
+        <small class="utility-dialog-error" id="utility-dialog-error" role="alert"></small>
+      </div>` : '';
+    content.innerHTML = `
+      <div class="utility-dialog-body">
+        <div class="eyebrow">${escapeHtml(eyebrow)}</div>
+        <div class="utility-dialog-heading"><h2>${escapeHtml(title)}</h2><button class="icon-button" type="button" id="utility-dialog-close" aria-label="Close dialog">×</button></div>
+        ${description ? `<p class="utility-dialog-description">${escapeHtml(description)}</p>` : ''}
+        <form id="utility-dialog-form" novalidate>
+          ${fieldMarkup}
+          <div class="dialog-footer">
+            ${cancelLabel ? '<button class="button button-secondary" type="button" id="utility-dialog-cancel">Cancel</button>' : ''}
+            <button class="button ${danger ? 'button-danger' : 'button-primary'}" type="submit">${escapeHtml(confirmLabel)}</button>
+          </div>
+        </form>
+      </div>`;
+    const input = $('#utility-dialog-input');
+    const form = $('#utility-dialog-form');
+    $('#utility-dialog-close').addEventListener('click', () => finish({ confirmed: false, value: '' }));
+    $('#utility-dialog-cancel')?.addEventListener('click', () => finish({ confirmed: false, value: '' }));
+    dialog.addEventListener('cancel', (event) => { event.preventDefault(); finish({ confirmed: false, value: '' }); }, { once: true });
+    dialog.addEventListener('close', () => { if (!settled) { settled = true; resolve({ confirmed: false, value: '' }); } }, { once: true });
+    $('#utility-dialog-copy')?.addEventListener('click', async () => {
+      if (!input) return;
+      try {
+        await navigator.clipboard.writeText(copyValue);
+        $('#utility-dialog-copy').textContent = 'Copied';
+      } catch {
+        input.focus();
+        input.select();
+        $('#utility-dialog-copy').textContent = 'Select & copy';
+        toast('Clipboard access is unavailable. Copy the selected code manually.');
+      }
+    });
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const value = input?.value ?? '';
+      const error = $('#utility-dialog-error');
+      if (field?.validate) {
+        const message = field.validate(value);
+        if (message) {
+          if (error) error.textContent = message;
+          input?.setAttribute('aria-invalid', 'true');
+          input?.focus();
+          return;
+        }
+      }
+      if (input && field?.required && !value.trim()) {
+        if (error) error.textContent = 'This field is required.';
+        input.setAttribute('aria-invalid', 'true');
+        input.focus();
+        return;
+      }
+      finish({ confirmed: true, value });
+    });
+    dialog.showModal();
+    if (input && !field?.readOnly) requestAnimationFrame(() => input.focus());
+  });
+}
+
+async function confirmAction(title, description, { confirmLabel = 'Confirm', danger = false } = {}) {
+  const result = await openUtilityDialog({ title, description, confirmLabel, danger });
+  return result.confirmed;
+}
+
 async function signOut() {
   if (!remoteMode || !supabase) return;
   const alternatives = queueMembers().filter((member) => member.id !== currentMemberId);
-  if (!alternatives.length && !window.confirm('You are the only active eligible colleague in the queue. Kindly wait for the next shift person to log in to avoid an SLA breach. Do you still want to sign out?')) return;
-  if (!window.confirm('Are you sure you want to sign out? Your presence will be set Offline and allocation responsibility will be handed over if another eligible colleague is online.')) return;
+  if (!alternatives.length && !await confirmAction('You are the only eligible colleague', 'No other eligible teammate is currently available in the queue. Signing out may delay the next allocation. Do you still want to continue?', { confirmLabel: 'Continue to sign out', danger: true })) return;
+  if (!await confirmAction('Sign out of the workspace?', 'Your presence will be set to Offline. Allocation responsibility will be handed over if another eligible colleague is online.', { confirmLabel: 'Sign out', danger: true })) return;
   const button = $('#profile-sign-out') || $('#profile-sign-out-mobile');
   if (button) button.disabled = true;
   try {
@@ -709,10 +795,16 @@ function renderAdmin() {
     <section class="panel admin-report-panel"><div class="panel-head"><div><div class="panel-title">Shift allocation report</div><div class="panel-subtitle">Fresh emails and existing tickets assigned per member.</div></div></div><div class="toolbar-actions"><div class="field"><label for="admin-report-date">Workspace date</label><input id="admin-report-date" type="date" value="${localDate()}"/></div><button class="button button-secondary" id="admin-run-report">Load report</button></div><div id="admin-shift-report" class="empty-state">Choose a date to view the allocation summary.</div></section>`;
 }
 
-function showOneTimeAccessCode(memberName, code) {
-  window.setTimeout(() => {
-    window.prompt(`Copy the new private access code for ${memberName}. This code will not be shown again.`, code);
-  }, 80);
+async function showOneTimeAccessCode(memberName, code) {
+  await openUtilityDialog({
+    eyebrow: 'WHO’S next · Private access',
+    title: 'Save this access code',
+    description: `A new private access code was created for ${memberName}. It is shown only once. Copy it now and share it directly with that team member.`,
+    field: { label: 'One-time access code', value: code, type: 'text', readOnly: true, help: 'Treat this code like a password. Anyone who has it can access this member profile.' },
+    copyValue: code,
+    confirmLabel: 'I’ve saved the code',
+    cancelLabel: null,
+  });
 }
 
 function openAdminAddMemberDialog() {
@@ -729,16 +821,15 @@ function openAdminAddMemberDialog() {
 async function setMemberAccessCode(memberId) {
   const member = adminRoster.find((item) => item.id === memberId);
   if (!member || !member.active) return toast('Only active members can have an access code changed.', true);
-  const code = window.prompt(
-    `Set a simple private access code for ${member.name}. Use 8–40 letters, numbers, dots, underscores or hyphens.`,
-    ''
-  );
-  if (code === null) return;
-  const normalized = code.trim();
-  if (!/^[A-Za-z0-9._-]{8,40}$/.test(normalized)) {
-    return toast('Access code must be 8–40 characters using letters, numbers, dots, underscores or hyphens.', true);
-  }
-  if (!window.confirm(`Save this access code for ${member.name}? Their other active sessions will be signed out.`)) return;
+  const entered = await openUtilityDialog({
+    title: `Set access code for ${member.name}`,
+    description: 'Use 8–40 characters. Allowed characters: letters, numbers, dots, underscores and hyphens. Other active sessions for this member will be signed out after saving.',
+    field: { label: 'New access code', type: 'password', minLength: 8, maxLength: 40, required: true, validate: (value) => /^[A-Za-z0-9._-]{8,40}$/.test(value.trim()) ? '' : 'Use 8–40 letters, numbers, dots, underscores or hyphens.' },
+    confirmLabel: 'Continue',
+  });
+  if (!entered.confirmed) return;
+  const normalized = entered.value.trim();
+  if (!await confirmAction('Save this access code?', `This replaces the current access code for ${member.name}. Their other active sessions will be signed out.`, { confirmLabel: 'Save access code', danger: true })) return;
   try {
     const { error } = await supabase.rpc('admin_set_member_access_code', {
       p_member_id: memberId,
@@ -760,7 +851,7 @@ async function saveAdminRole(memberId) {
   const member = adminRoster.find((item) => item.id === memberId);
   if (!member) return;
   const label = role === 'super_admin' ? 'Super Admin' : role === 'sme' ? 'SME' : 'regular member';
-  if (!window.confirm(`Set ${member.name} as ${label}? Super Admin and SME have identical workspace permissions.`)) return;
+  if (!await confirmAction(`Update access for ${member.name}?`, `Set this profile as ${label}. Super Admin and SME have identical workspace permissions.`, { confirmLabel: 'Save role' })) return;
   try {
     const { error } = await supabase.rpc('admin_set_member_role', { p_member_id: memberId, p_role: role });
     if (error) throw error;
@@ -790,7 +881,7 @@ async function toggleMemberActive(memberId, active) {
   const member = adminRoster.find((item) => item.id === memberId);
   if (!member) return;
   const nextActive = !active;
-  if (!window.confirm(`${nextActive ? 'Reactivate' : 'Deactivate'} ${member.name}?`)) return;
+  if (!await confirmAction(`${nextActive ? 'Reactivate' : 'Deactivate'} ${member.name}?`, nextActive ? 'This member will be able to access the workspace again using their access code.' : 'This member will no longer be able to join the workspace. Existing historical records will be retained.', { confirmLabel: nextActive ? 'Reactivate member' : 'Deactivate member', danger: !nextActive })) return;
   try {
     const { error } = await supabase.rpc('admin_update_member', { p_member_id: memberId, p_name: member.name, p_active: nextActive });
     if (error) throw error;
@@ -804,8 +895,14 @@ async function toggleMemberActive(memberId, active) {
 async function renameMember(memberId) {
   const member = adminRoster.find((item) => item.id === memberId);
   if (!member) return;
-  const name = window.prompt('Update member name:', member.name);
-  if (name === null || !name.trim() || name.trim() === member.name) return;
+  const entered = await openUtilityDialog({
+    title: 'Update member name',
+    description: 'The updated name will appear across the team roster and operational history.',
+    field: { label: 'Member name', value: member.name, maxLength: 80, minLength: 2, required: true, validate: (value) => value.trim().length >= 2 ? '' : 'Enter a name with at least 2 characters.' },
+    confirmLabel: 'Save name',
+  });
+  if (!entered.confirmed || !entered.value.trim() || entered.value.trim() === member.name) return;
+  const name = entered.value;
   try {
     const { error } = await supabase.rpc('admin_update_member', { p_member_id: memberId, p_name: name.trim(), p_active: member.active });
     if (error) throw error;
@@ -931,7 +1028,7 @@ async function withdrawOwnRequest(requestId) {
   const request = state.requests.find((item) => item.id === requestId && item.memberId === currentMemberId);
   if (!request || !['pending', 'approved'].includes(request.status)) return toast('This request can no longer be withdrawn.', true);
   if (request.status === 'approved' && new Date(request.endAt).getTime() <= Date.now()) return toast('This approved request has already ended; its history is retained.', true);
-  if (!window.confirm('Withdraw this request? If it is currently approved, you will become eligible again when your shift and presence also allow it.')) return;
+  if (!await confirmAction('Withdraw this availability request?', 'If it is currently approved, you may become eligible again once your shift and presence also allow it. The request history will be retained.', { confirmLabel: 'Withdraw request', danger: true })) return;
   try {
     if (remoteMode) await rpc('withdraw_my_availability_request', { p_request_id: requestId });
     else {
@@ -1086,8 +1183,15 @@ async function reviewRequest(requestId, decision) {
   if (!isCurrentAssignee() && !(request.type === 'extended_break' && currentIsAdmin)) {
     return toast('Only the current assignee or an SME/Super Admin can review this break request.', true);
   }
-  const confirmation = window.prompt('SME / Super Admin confirmation (optional):', '');
-  if (confirmation === null) return;
+  const entered = await openUtilityDialog({
+    title: `${decision === 'approved' ? 'Approve' : 'Decline'} availability request`,
+    description: 'Add an optional SME / Super Admin confirmation note for the audit history.',
+    field: { label: 'Confirmation note (optional)', value: '', maxLength: 500, required: false, placeholder: 'Add context for this decision…' },
+    confirmLabel: decision === 'approved' ? 'Approve request' : 'Decline request',
+    danger: decision !== 'approved',
+  });
+  if (!entered.confirmed) return;
+  const confirmation = entered.value;
   try {
     if (remoteMode) await rpc('review_availability_request', { p_request_id: requestId, p_decision: decision, p_confirmation: confirmation.trim() || null });
     else { request.status = decision; request.reviewedBy = currentMemberId; request.reviewedAt = new Date().toISOString(); request.confirmation = confirmation.trim() || null; logActivity(`${currentMember().name} ${decision} a request from ${state.members.find((m) => m.id === request.memberId)?.name || 'a team member'}.`, decision === 'approved' ? '✓' : '×'); saveDemoState(); }
