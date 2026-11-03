@@ -293,7 +293,7 @@ function showJoinScreen(message = '') {
       <p>Enter the individual access code shared with you. Your code identifies your team profile—no username, email or password required.</p>
       ${message ? `<div class="notice">${escapeHtml(message)}</div>` : ''}
       <form id="join-form">
-        <div class="field"><label for="join-code">Your individual access code</label><input id="join-code" name="code" type="password" autocomplete="one-time-code" required minlength="16" maxlength="200" placeholder="Enter your personal team code" /></div>
+        <div class="field"><label for="join-code">Your individual access code</label><input id="join-code" name="code" type="password" autocomplete="one-time-code" required minlength="8" maxlength="200" placeholder="Enter your personal team code" /></div>
         <button class="button button-primary" type="submit">Open workspace <span>→</span></button>
       </form>
       <div class="join-help">Your code maps to one team member. Keep it private and contact the workspace owner if it is lost or exposed.</div>
@@ -304,7 +304,7 @@ function showJoinScreen(message = '') {
 async function joinWorkspace(event) {
   event.preventDefault();
   const code = $('#join-code').value.trim();
-  if (code.length < 16) return toast('Enter the individual access code shared with you.', true);
+  if (code.length < 8) return toast('Enter an access code of at least 8 characters.', true);
   const button = $('#join-form button[type="submit"]');
   button.disabled = true; button.setAttribute('aria-busy', 'true'); button.innerHTML = '<span class="button-spinner" aria-hidden="true"></span>Connecting securely…';
   try {
