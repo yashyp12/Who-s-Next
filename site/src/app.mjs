@@ -247,8 +247,7 @@ function startPresenceTracking() {
   presenceTimer = window.setInterval(syncPresence, 20000);
   presenceRefreshTimer = window.setInterval(() => {
     refreshPresence().catch((error) => console.warn('Presence reconciliation failed:', error));
-  }, 20000);
-  hourlyReconcileTimer = window.setInterval(() => {
+  }, 20000);  hourlyReconcileTimer = window.setInterval(() => {
     reloadRemote().catch((error) => console.warn('Hourly workspace reconciliation failed:', error));
   }, 60 * 60 * 1000);
 }
@@ -293,7 +292,7 @@ function showJoinScreen(message = '') {
       <p>Enter the individual access code shared with you. Your code identifies your team profile—no username, email or password required.</p>
       ${message ? `<div class="notice">${escapeHtml(message)}</div>` : ''}
       <form id="join-form">
-        <div class="field"><label for="join-code">Your individual access code</label><input id="join-code" name="code" type="password" autocomplete="one-time-code" required minlength="16" maxlength="200" placeholder="Enter your personal team code" /></div>
+        <div class="field"><label for="join-code">Your individual access code</label><input id="join-code" name="code" type="password" autocomplete="one-time-code" required minlength="8" maxlength="40" pattern="[A-Za-z0-9._-]{8,40}" placeholder="e.g. yashyp12" /></div>
         <button class="button button-primary" type="submit">Open workspace <span>→</span></button>
       </form>
       <div class="join-help">Your code maps to one team member. Keep it private and contact the workspace owner if it is lost or exposed.</div>
@@ -304,7 +303,7 @@ function showJoinScreen(message = '') {
 async function joinWorkspace(event) {
   event.preventDefault();
   const code = $('#join-code').value.trim();
-  if (code.length < 16) return toast('Enter the individual access code shared with you.', true);
+  if (!/^[A-Za-z0-9._-]{8,40}$/.test(code)) return toast('Access code must be 8–40 characters using letters, numbers, dots, underscores or hyphens.', true);
   const button = $('#join-form button[type="submit"]');
   button.disabled = true; button.setAttribute('aria-busy', 'true'); button.innerHTML = '<span class="button-spinner" aria-hidden="true"></span>Connecting securely…';
   try {
@@ -497,8 +496,7 @@ function scheduleOperationalRefresh() {
   const boundary = nextOperationalBoundary();
   if (!boundary) return;
   const delay = Math.max(1000, boundary - Date.now() + 500);
-  boundaryTimer = setTimeout(async () => {
-    const reminder = (state.breaks || []).find((item) => {
+  boundaryTimer = setTimeout(async () => {    const reminder = (state.breaks || []).find((item) => {
       const startAt = new Date(workspaceInputToIso(`${item.date}T${item.start}`)).getTime();
       return startAt > Date.now() && startAt - Date.now() <= 5 * 60000 + 3000 && startAt - Date.now() >= 4 * 60000;
     });
@@ -703,7 +701,7 @@ function renderAdmin() {
       <div class="schedule-list">${adminRoster.length ? adminRoster.map((member) => {
         const shift = state.shifts.find((item) => item.memberId === member.id && item.date === localDate()) || null;
         const role = member.adminRole || 'none';
-        return `<article class="admin-member-row"><div class="admin-member-main"><span class="avatar">${initials(member.name)}</span><div><strong>${escapeHtml(member.name)}</strong><small>${member.active ? 'Active member' : 'Deactivated'} · ${shift ? `${shift.start}–${shift.end}` : 'No shift today'} · ${role === 'super_admin' ? 'Super Admin' : role === 'sme' ? 'SME' : 'Team member'}</small></div></div><div class="admin-member-actions"><select class="admin-role-select" id="admin-role-${member.id}" aria-label="Access role for ${escapeAttr(member.name)}"><option value="none" ${role === 'none' ? 'selected' : ''}>Member</option><option value="sme" ${role === 'sme' ? 'selected' : ''}>SME</option><option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>Super Admin</option></select><button class="button button-secondary button-small" data-admin-role-save="${member.id}">Save role</button><button class="button button-secondary button-small" data-admin-shift="${member.id}">Shift</button><button class="button button-secondary button-small" data-admin-name="${member.id}">Rename</button><button class="button button-secondary button-small" data-admin-rotate="${member.id}">New code</button><button class="button button-${member.active ? 'danger' : 'secondary'} button-small" data-admin-toggle="${member.id}" data-active="${member.active}">${member.active ? 'Deactivate' : 'Activate'}</button></div></article>`;
+        return `<article class="admin-member-row"><div class="admin-member-main"><span class="avatar">${initials(member.name)}</span><div><strong>${escapeHtml(member.name)}</strong><small>${member.active ? 'Active member' : 'Deactivated'} · ${shift ? `${shift.start}–${shift.end}` : 'No shift today'} · ${role === 'super_admin' ? 'Super Admin' : role === 'sme' ? 'SME' : 'Team member'}</small></div></div><div class="admin-member-actions"><select class="admin-role-select" id="admin-role-${member.id}" aria-label="Access role for ${escapeAttr(member.name)}"><option value="none" ${role === 'none' ? 'selected' : ''}>Member</option><option value="sme" ${role === 'sme' ? 'selected' : ''}>SME</option><option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>Super Admin</option></select><button class="button button-secondary button-small" data-admin-role-save="${member.id}">Save role</button><button class="button button-secondary button-small" data-admin-shift="${member.id}">Shift</button><button class="button button-secondary button-small" data-admin-name="${member.id}">Rename</button><button class="button button-secondary button-small" data-admin-set-code="${member.id}">Set code</button><button class="button button-${member.active ? 'danger' : 'secondary'} button-small" data-admin-toggle="${member.id}" data-active="${member.active}">${member.active ? 'Deactivate' : 'Activate'}</button></div></article>`;
       }).join('') : '<div class="empty-state">No members found. Add the first team member to get started.</div>'}</div>
     </section>
     <section class="panel admin-report-panel"><div class="panel-head"><div><div class="panel-title">Shift allocation report</div><div class="panel-subtitle">Fresh emails and existing tickets assigned per member.</div></div></div><div class="toolbar-actions"><div class="field"><label for="admin-report-date">Workspace date</label><input id="admin-report-date" type="date" value="${localDate()}"/></div><button class="button button-secondary" id="admin-run-report">Load report</button></div><div id="admin-shift-report" class="empty-state">Choose a date to view the allocation summary.</div></section>`;
@@ -726,17 +724,31 @@ function openAdminAddMemberDialog() {
   });
 }
 
-async function rotateMemberCode(memberId) {
+async function setMemberAccessCode(memberId) {
   const member = adminRoster.find((item) => item.id === memberId);
-  if (!member || !window.confirm(`Rotate the private access code for ${member.name}? Their existing sessions will be signed out.`)) return;
+  if (!member || !member.active) return toast('Only active members can have an access code changed.', true);
+  const code = window.prompt(
+    `Set a simple private access code for ${member.name}. Use 8–40 letters, numbers, dots, underscores or hyphens.`,
+    ''
+  );
+  if (code === null) return;
+  const normalized = code.trim();
+  if (!/^[A-Za-z0-9._-]{8,40}$/.test(normalized)) {
+    return toast('Access code must be 8–40 characters using letters, numbers, dots, underscores or hyphens.', true);
+  }
+  if (!window.confirm(`Save this access code for ${member.name}? Their other active sessions will be signed out.`)) return;
   try {
-    const { data, error } = await supabase.rpc('admin_rotate_member_access_code', { p_member_id: memberId });
+    const { error } = await supabase.rpc('admin_set_member_access_code', {
+      p_member_id: memberId,
+      p_access_code: normalized,
+    });
     if (error) throw error;
-    showOneTimeAccessCode(data.name, data.access_code);
     adminRosterLoaded = false;
     await loadAdminRoster();
-    toast('Access code rotated. Share the new code privately.');
-  } catch (error) { toast(error.message || 'Unable to rotate access code.', true); }
+    toast(`Access code updated for ${member.name}. Share it privately.`);
+  } catch (error) {
+    toast(error.message || 'Unable to update access code.', true);
+  }
 }
 
 async function saveAdminRole(memberId) {
@@ -747,8 +759,7 @@ async function saveAdminRole(memberId) {
   if (!member) return;
   const label = role === 'super_admin' ? 'Super Admin' : role === 'sme' ? 'SME' : 'regular member';
   if (!window.confirm(`Set ${member.name} as ${label}? Super Admin and SME have identical workspace permissions.`)) return;
-  try {
-    const { error } = await supabase.rpc('admin_set_member_role', { p_member_id: memberId, p_role: role });
+  try {    const { error } = await supabase.rpc('admin_set_member_role', { p_member_id: memberId, p_role: role });
     if (error) throw error;
     await loadAdminRoster();
     toast(`${member.name} access updated.`);
@@ -860,7 +871,7 @@ function bindViewActions() {
   $('#export-csv')?.addEventListener('click', exportAllocations);
   $('#admin-add-member')?.addEventListener('click', openAdminAddMemberDialog);
   $('#admin-run-report')?.addEventListener('click', runAdminShiftReport);
-  document.querySelectorAll('[data-admin-rotate]').forEach((button) => button.addEventListener('click', () => rotateMemberCode(button.dataset.adminRotate)));
+  document.querySelectorAll('[data-admin-set-code]').forEach((button) => button.addEventListener('click', () => setMemberAccessCode(button.dataset.adminSetCode)));
   document.querySelectorAll('[data-admin-toggle]').forEach((button) => button.addEventListener('click', () => toggleMemberActive(button.dataset.adminToggle, button.dataset.active === 'true')));
   document.querySelectorAll('[data-admin-name]').forEach((button) => button.addEventListener('click', () => renameMember(button.dataset.adminName)));
   document.querySelectorAll('[data-admin-shift]').forEach((button) => button.addEventListener('click', () => openAdminShiftDialog(button.dataset.adminShift)));
@@ -997,8 +1008,7 @@ function openAllocationDialog(existingTicket = false) {
   if (!target) return toast('No employee is currently eligible for allocation.', true);
   openDialog(existingTicket ? 'Route existing ticket' : 'Record new email', `The next eligible colleague is ${target.name}. ${existingTicket ? 'Existing tickets may be routed to colleagues in troubleshooting or meeting status.' : 'Only available colleagues can receive a new email.'} The queue advances immediately.`, `<div class="notice">Next recipient: <strong>${escapeHtml(target.name)}</strong>. Your name (${escapeHtml(currentMember().name)}) will be stored as the assigner.</div><div class="field"><label for="allocation-subject">Email subject (optional)</label><input id="allocation-subject" name="subject" maxlength="200" placeholder="e.g. VPN access issue - Bangalore team" /></div><div class="field" style="margin-top:12px"><label for="allocation-reference">Ticket / email reference (optional)</label><input id="allocation-reference" name="reference" maxlength="100" placeholder="e.g. INC0012345" /></div>`, 'Confirm assignment', async (form) => {
     const subject = form.get('subject').trim();
-    const reference = form.get('reference').trim();
-    if (remoteMode) await rpc('record_next_allocation', { p_reference: reference || null, p_subject: subject || null, p_existing_ticket: existingTicket });
+    const reference = form.get('reference').trim();    if (remoteMode) await rpc('record_next_allocation', { p_reference: reference || null, p_subject: subject || null, p_existing_ticket: existingTicket });
     else {
       const result = recordAllocation({ lastAllocatedMemberId: state.lastAllocatedMemberId }, domainMembers(), { id: id(), assignedBy: currentMemberId, assignedAt: new Date().toISOString(), reference, emailSubject: subject, context: contextNow() });
       state.lastAllocatedMemberId = result.state.lastAllocatedMemberId;
