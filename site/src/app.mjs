@@ -552,7 +552,7 @@ async function maybeAutoCheckIn() {
 function openUtilityDialog({ title, description = '', field = null, confirmLabel = 'Continue', cancelLabel = 'Cancel', danger = false, copyValue = null, eyebrow = 'WHO’S next · Confirmation' }) {
   const dialog = $('#utility-dialog');
   const content = $('#utility-dialog-content');
-  if (!dialog || !content) return Promise.resolve({ confirmed: false, value: '' });
+  if (!dialog || !content || dialog.open) return Promise.resolve({ confirmed: false, value: '' });
 
   return new Promise((resolve) => {
     let settled = false;
@@ -606,6 +606,11 @@ function openUtilityDialog({ title, description = '', field = null, confirmLabel
         $('#utility-dialog-copy').textContent = 'Select & copy';
         toast('Clipboard access is unavailable. Copy the selected code manually.');
       }
+    });
+    input?.addEventListener('input', () => {
+      input.removeAttribute('aria-invalid');
+      const error = $('#utility-dialog-error');
+      if (error) error.textContent = '';
     });
     form.addEventListener('submit', (event) => {
       event.preventDefault();
