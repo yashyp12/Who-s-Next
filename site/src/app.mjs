@@ -33,7 +33,7 @@ let refreshInProgress = false;
 let refreshQueued = false;
 let realtimeRefreshTimer = null;
 let hourlyReconcileTimer = null;
-let sidebarCollapsed = localStorage.getItem('whos-next-sidebar-collapsed') === 'true';
+const sidebarCollapsed = false;
 let profileMenuOpen = false;
 let autoCheckInInProgress = false;
 
@@ -50,6 +50,23 @@ const statusFor = (member) => getMemberStatus(member, { now: new Date().toISOStr
 const prettyDate = (date) => new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${date}T12:00:00Z`));
 const prettyTime = (value) => { if (!value) return '—'; const date = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(value) ? new Date(workspaceInputToIso(value.slice(0, 16))) : new Date(value); return new Intl.DateTimeFormat(undefined, { timeZone: state?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone, hour: '2-digit', minute: '2-digit' }).format(date); };
 const prettyDateTime = (value) => value ? new Intl.DateTimeFormat(undefined, { timeZone: state?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone, day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date(value)) : '—';
+
+function formatWorkspaceClock(now = new Date()) {
+  const localTimeText = () => now.toLocaleTimeString(undefined, {
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  });
+  const timezone = typeof state?.timezone === 'string' ? state.timezone.trim() : '';
+  if (!timezone) return localTimeText();
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      timeZone: timezone, hour: '2-digit', minute: '2-digit',
+      second: '2-digit', hour12: false,
+    }).format(now);
+  } catch (error) {
+    console.warn('Invalid workspace timezone; displaying local time instead:', error);
+    return localTimeText();
+  }
+}
 function workspaceInputToIso(value) {
   if (!value || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) throw new Error('Enter a valid date and time.');
   const [datePart, timePart] = value.split('T');
@@ -289,7 +306,7 @@ async function joinWorkspace(event) {
   const code = $('#join-code').value.trim();
   if (code.length < 16) return toast('Enter the individual access code shared with you.', true);
   const button = $('#join-form button[type="submit"]');
-  button.disabled = true; button.textContent = 'Opening workspace…';
+  button.disabled = true; button.setAttribute('aria-busy', 'true'); button.innerHTML = '<span class="button-spinner" aria-hidden="true"></span>Connecting securely…';
   try {
     const { data, error } = await supabase.rpc('join_workspace', { p_access_code: code });
     if (error) throw error;
@@ -303,7 +320,7 @@ async function joinWorkspace(event) {
     await reloadRemote();
   } catch (error) {
     toast(error.message || 'Unable to join workspace.', true);
-    button.disabled = false; button.innerHTML = 'Open workspace <span>→</span>';
+    button.disabled = false; button.removeAttribute('aria-busy'); button.innerHTML = 'Open workspace <span>→</span>';
   }
 }
 
@@ -355,7 +372,7 @@ function renderApp() {
   $('#app').innerHTML = `
     <div class="layout ${sidebarCollapsed ? 'sidebar-collapsed' : ''}">
       <aside class="sidebar">
-        <div><div class="brand sidebar-brand-row"><button class="button button-secondary button-small utility-icon-button sidebar-toggle-button" id="sidebar-toggle" type="button" aria-label="${sidebarCollapsed ? 'Show' : 'Hide'} sidebar" title="${sidebarCollapsed ? 'Show' : 'Hide'} sidebar">☰</button><img class="brand-wordmark" src="/whos-next-logo.svg" alt="WHO'S next" /></div><div class="workspace-tag">${escapeHtml(state.workspaceName)}</div></div>
+        <div><div class="brand sidebar-brand-row"><img class="brand-wordmark" src="/whos-next-logo.svg" alt="WHO'S next" /></div><div class="workspace-tag">${escapeHtml(state.workspaceName)}</div></div>
         <div><div class="nav-label">Workspace</div><nav class="nav" aria-label="Main navigation">
           ${navButton('allocation','⇄','Allocate')}${navButton('overview','⌂','Team overview')}${navButton('schedule','▦','My profile')}${navButton('requests','↗','Requests',counts.pending)}${navButton('reports','▤','Reports')}${currentIsAdmin ? navButton('admin','⚙','Admin') : ''}
         </nav></div>
@@ -365,7 +382,7 @@ function renderApp() {
         </div>
       </aside>
       <main class="main">
-        <header class="topbar"><div class="topbar-title-wrap">${sidebarCollapsed ? '<button class="button button-secondary button-small utility-icon-button" id="sidebar-toggle" type="button" aria-label="Show sidebar" title="Show sidebar">☰</button>' : ''}<div><div class="eyebrow">${activeView === 'overview' ? 'Live operations' : 'Team workspace'}</div><h1 class="page-title">${viewTitle(activeView)}</h1></div></div><div class="top-actions"><button class="mobile-profile-toggle" id="profile-menu-mobile-toggle" type="button" aria-label="Account menu" aria-expanded="${profileMenuOpen}">${initials(me.name)}</button>${profileMenuOpen ? '<div class="mobile-profile-popover"><button type="button" id="profile-sign-out-mobile">↪ Sign out</button></div>' : ''}<span id="workspace-clock" class="digital-clock" aria-label="Workspace time">--:--:--</span>${remoteMode ? '<span class="live-pill"><i class="live-dot"></i> Live sync</span>' : '<span class="demo-pill">● Local preview</span>'}<button class="button button-secondary button-small" id="refresh-workspace">↻ Refresh</button><button class="button button-secondary button-small" id="new-request-top">＋ New request</button></div></header>
+        <header class="topbar"><div class="topbar-title-wrap"><div><div class="eyebrow">${activeView === 'overview' ? 'Live operations' : 'Team workspace'}</div><h1 class="page-title">${viewTitle(activeView)}</h1></div></div><span id="workspace-clock" class="digital-clock" aria-label="Workspace time">${escapeHtml(formatWorkspaceClock())}</span><div class="top-actions"><button class="button button-secondary button-small" id="new-request-top">＋ New request</button><button class="button button-secondary button-small" id="refresh-workspace">↻ Refresh</button><div class="notification-center" aria-label="Notifications"></div>${remoteMode ? '<span class="live-pill"><i class="live-dot"></i> Live sync</span>' : '<span class="demo-pill">● Local preview</span>'}<button class="mobile-profile-toggle" id="profile-menu-mobile-toggle" type="button" aria-label="Account menu" aria-expanded="${profileMenuOpen}">${initials(me.name)}</button>${profileMenuOpen ? '<div class="mobile-profile-popover"><button type="button" id="profile-sign-out-mobile">↪ Sign out</button></div>' : ''}</div></header>
         <section class="section-view ${activeView === 'overview' ? 'active' : ''}" id="view-overview">${renderOverview(me, assignee, counts, statuses)}</section>
         <section class="section-view ${activeView === 'schedule' ? 'active' : ''}" id="view-schedule">${renderSchedule(me)}</section>
         <section class="section-view ${activeView === 'requests' ? 'active' : ''}" id="view-requests">${renderRequests(me)}</section>
@@ -378,12 +395,11 @@ function renderApp() {
   if (remoteMode) initializeNotificationCenter({ supabase, memberId: currentMemberId });
   $$('.nav button').forEach((button) => button.addEventListener('click', () => { activeView = button.dataset.view; renderApp(); }));
   $('#new-request-top')?.addEventListener('click', openRequestDialog);
-  $('#sidebar-toggle')?.addEventListener('click', toggleSidebar);
   $('#profile-menu-toggle')?.addEventListener('click', () => { profileMenuOpen = !profileMenuOpen; renderApp(); });
   $('#profile-menu-mobile-toggle')?.addEventListener('click', () => { profileMenuOpen = !profileMenuOpen; renderApp(); });
   $('#profile-sign-out')?.addEventListener('click', signOut);
   $('#profile-sign-out-mobile')?.addEventListener('click', signOut);
-  $('[data-admin-role-save]').forEach((button) => button.addEventListener('click', () => saveAdminRole(button.dataset.adminRoleSave)));
+  $$('[data-admin-role-save]').forEach((button) => button.addEventListener('click', () => saveAdminRole(button.dataset.adminRoleSave)));
   $('#refresh-workspace')?.addEventListener('click', async () => { try { if (remoteMode) await reloadRemote(); else renderApp(); toast('Workspace refreshed.'); } catch (error) { toast(error.message || 'Refresh failed.', true); } });
   $('#demo-profile')?.addEventListener('change', (event) => { currentMemberId = event.target.value; localStorage.setItem(PROFILE_KEY, currentMemberId); renderApp(); });
   bindViewActions();
@@ -398,8 +414,31 @@ function renderApp() {
 
 function startWorkspaceClock() {
   const update = () => {
+    const now = new Date();
     const clock = $('#workspace-clock');
-    if (clock) clock.textContent = new Intl.DateTimeFormat(undefined, { timeZone: state?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date());
+    if (clock) {
+      // Paint a local-time fallback first so a bad workspace timezone can
+      // never leave the visible clock stuck on its placeholder.
+      clock.textContent = formatWorkspaceClock(now);
+      const workspaceTimezone = typeof state?.timezone === 'string' ? state.timezone.trim() : '';
+      if (workspaceTimezone) {
+        try {
+          clock.textContent = new Intl.DateTimeFormat(undefined, {
+            timeZone: workspaceTimezone,
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false,
+          }).format(now);
+          clock.title = `Workspace time · ${workspaceTimezone}`;
+        } catch (error) {
+          console.warn('Invalid workspace timezone; displaying local time instead:', error);
+          clock.title = 'Local device time (workspace timezone is invalid)';
+        }
+      } else {
+        clock.title = 'Local device time';
+      }
+    }
     const countdown = $('#break-countdown');
     if (countdown) {
       const member = domainMembers().find((entry) => entry.id === currentMemberId);
@@ -509,12 +548,6 @@ async function maybeAutoCheckIn() {
   }
 }
 
-function toggleSidebar() {
-  sidebarCollapsed = !sidebarCollapsed;
-  localStorage.setItem('whos-next-sidebar-collapsed', String(sidebarCollapsed));
-  renderApp();
-}
-
 async function signOut() {
   if (!remoteMode || !supabase) return;
   const alternatives = queueMembers().filter((member) => member.id !== currentMemberId);
@@ -526,12 +559,21 @@ async function signOut() {
     const latestAttendance = latestAttendanceForCurrentMember();
     if (latestAttendance?.eventType === 'check_in') {
       const { error: checkoutError } = await supabase.rpc('record_attendance', { p_event_type: 'check_out' });
-      if (checkoutError) throw checkoutError;
+      if (checkoutError) console.warn('Attendance checkout failed; continuing with the mandatory allocation handover:', checkoutError);
     }
-    const { error: offlineError } = await supabase.rpc('set_member_offline');
+    // set_member_offline atomically removes presence and reconciles allocation
+    // ownership in the same database transaction (migration 011).
+    const { data: offlineResult, error: offlineError } = await supabase.rpc('set_member_offline');
     if (offlineError) throw offlineError;
-    const { error: handoverError } = await supabase.rpc('ensure_shift_assignee');
-    if (handoverError) throw handoverError;
+    const handover = offlineResult?.handover;
+    if (!handover || !Object.prototype.hasOwnProperty.call(handover, 'current_assignee_id')) {
+      await heartbeatPresence('active').catch((restoreError) => console.error('Could not restore presence after an incomplete logout:', restoreError));
+      throw new Error('Automatic logout handover is not installed in the database yet. Apply migration 011, then retry.');
+    }
+    if (handover.current_assignee_id === currentMemberId) {
+      await heartbeatPresence('active').catch((restoreError) => console.error('Could not restore presence after a failed handover:', restoreError));
+      throw new Error('Logout was stopped because allocation responsibility is still assigned to you. Please retry or contact an SME.');
+    }
     stopPresenceTracking();
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
@@ -603,6 +645,7 @@ function renderSchedule(me) {
   return `<div class="page-toolbar"><div><div class="panel-title">Your shifts & breaks</div><div class="panel-subtitle">Manage only your own schedule. Changes are retained in history.</div></div><div class="toolbar-actions"><button class="button button-secondary" id="add-break">＋ Add break</button><button class="button button-secondary" id="new-shift-swap">⇄ Request swap</button><button class="button button-primary" id="set-shift">＋ Set shift</button></div></div>
     <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Scheduled shifts</div><div class="panel-subtitle">${shifts.length} shift record(s)</div></div></div><div class="schedule-list">${shifts.length ? shifts.map((shift) => `<div class="schedule-row"><div><strong>${prettyDate(shift.date)}</strong><small style="display:block">${escapeHtml(SHIFT_PRESETS[shift.key]?.label || shift.key || 'Custom shift')}</small></div><div>${shift.start}</div><div>${shift.end}</div><div><button class="button button-secondary button-small" data-edit-shift="${shift.id}">Edit</button></div></div>`).join('') : '<div class="empty-state">No shifts have been entered. Add your first shift to appear in the team schedule.</div>'}</div></section>
     <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Planned breaks</div><div class="panel-subtitle">60 minutes total per shift. Additional time needs SME or Super Admin approval.</div></div></div><div class="schedule-list">${breaks.length ? breaks.map((item) => `<div class="schedule-row"><div><strong>${prettyDate(item.date)}</strong><small style="display:block">${item.breakType === 'meal' ? 'Meal break' : 'BioBreak'} · ${escapeHtml(item.note || 'Scheduled break')}</small></div><div>${item.start}</div><div>${item.end}</div><div><span class="status muted">Scheduled</span></div></div>`).join('') : '<div class="empty-state">No breaks planned yet.</div>'}</div></section>
+    <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">My availability requests</div><div class="panel-subtitle">Edit pending requests or withdraw your own pending and active approved requests. Reviewed history stays visible.</div></div><button class="button button-primary button-small" id="new-request-profile">＋ New request</button></div><div class="request-list">${state.requests.filter((request) => request.memberId === currentMemberId).sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt)).length ? state.requests.filter((request) => request.memberId === currentMemberId).sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt)).map(renderOwnAvailabilityRequestCard).join('') : '<div class="empty-state">You have not submitted any availability requests.</div>'}</div></section>
     <section class="panel"><div class="panel-head"><div><div class="panel-title">One-day shift swaps</div><div class="panel-subtitle">A swap takes effect only after the invited colleague accepts</div></div></div><div class="request-list">${(state.shiftSwaps || []).filter((swap) => swap.requesterMemberId === currentMemberId || swap.partnerMemberId === currentMemberId).length ? (state.shiftSwaps || []).filter((swap) => swap.requesterMemberId === currentMemberId || swap.partnerMemberId === currentMemberId).map(renderShiftSwapCard).join('') : '<div class="empty-state">No shift swap requests involving you.</div>'}</div></section>`;
 }
 
@@ -807,6 +850,9 @@ function bindViewActions() {
   $('#extend-break')?.addEventListener('click', () => openBreakDialog(true));
   document.querySelectorAll('#set-shift').forEach((button) => button.addEventListener('click', () => openShiftDialog()));
   $('#new-shift-swap')?.addEventListener('click', openShiftSwapDialog);
+  $('#new-request-profile')?.addEventListener('click', openRequestDialog);
+  $$('[data-edit-own-request]').forEach((button) => button.addEventListener('click', () => openRequestDialog(button.dataset.editOwnRequest)));
+  $$('[data-withdraw-request]').forEach((button) => button.addEventListener('click', () => withdrawOwnRequest(button.dataset.withdrawRequest)));
   $$('[data-swap-response]').forEach((button) => button.addEventListener('click', () => respondShiftSwap(button.dataset.swapResponse, button.dataset.accept === 'true')));
   $('#new-request-page')?.addEventListener('click', openRequestDialog);
   $$('[data-review]').forEach((button) => button.addEventListener('click', () => reviewRequest(button.dataset.review, button.dataset.decision)));
@@ -828,17 +874,62 @@ function openDialog(title, description, fields, submitLabel, onSubmit) {
   dialog.showModal();
 }
 
-function openRequestDialog() {
-  const now = new Date(); const later = addMinutes(now, 45);
-  const options = Object.entries(REQUEST_TYPES).map(([value, label]) => `<option value="${value}">${escapeHtml(label)}</option>`).join('');
-  openDialog('Raise an availability request', 'Pending requests do not remove you from the allocation queue. Only an approved request changes eligibility.', `
-    <div class="form-grid"><div class="field"><label for="request-type">Request type</label><select id="request-type" name="type" required>${options}</select></div><div class="field"><label for="request-reason">Short reason</label><input id="request-reason" name="reason" maxlength="100" required placeholder="e.g. Daily operations sync" /></div><div class="field"><label for="request-start">Start</label><input id="request-start" name="startAt" type="datetime-local" required value="${localDateTime(now)}" /></div><div class="field"><label for="request-end">Expected end</label><input id="request-end" name="endAt" type="datetime-local" required value="${localDateTime(later)}" /></div><div class="field full"><label for="request-details">Additional details (optional)</label><textarea id="request-details" name="details" maxlength="500" placeholder="Add context for the current assignee"></textarea></div></div>`, 'Submit request', async (form) => {
-    const request = { id: id(), memberId: currentMemberId, type: form.get('type'), reason: form.get('reason').trim(), details: form.get('details').trim(), startAt: workspaceInputToIso(form.get('startAt')), endAt: workspaceInputToIso(form.get('endAt')) };
-    const error = validateRequestPeriod(request.startAt, request.endAt); if (error) throw new Error(error);
-    if (remoteMode) await rpc('submit_availability_request', { p_type: request.type, p_reason: request.reason, p_details: request.details, p_start_at: request.startAt, p_end_at: request.endAt });
-    else { Object.assign(request, { status: 'pending', createdAt: new Date().toISOString() }); state.requests.unshift(request); logActivity(`${currentMember().name} submitted a ${REQUEST_TYPES[request.type]} request.`, '↗'); saveDemoState(); }
-    await refreshAfterAction('Request submitted. It will remain pending until reviewed.');
-  });
+function openRequestDialog(existingId = null) {
+  const existing = existingId ? state.requests.find((item) => item.id === existingId && item.memberId === currentMemberId) : null;
+  if (existing && existing.status !== 'pending') return toast('Only pending requests can be edited.', true);
+  const now = new Date();
+  const later = addMinutes(now, 45);
+  const startValue = existing ? localDateTime(new Date(existing.startAt)) : localDateTime(now);
+  const endValue = existing ? localDateTime(new Date(existing.endAt)) : localDateTime(later);
+  const options = Object.entries(REQUEST_TYPES).map(([value, label]) => `<option value="${value}" ${existing?.type === value ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('');
+  openDialog(existing ? 'Update your availability request' : 'Raise an availability request',
+    existing ? 'You can edit your own request until the current assignee reviews it.' : 'Pending requests do not remove you from the allocation queue. Only an approved request changes eligibility.',
+    `
+    <div class="form-grid"><div class="field"><label for="request-type">Request type</label><select id="request-type" name="type" required>${options}</select></div><div class="field"><label for="request-reason">Short reason</label><input id="request-reason" name="reason" maxlength="100" required value="${escapeHtml(existing?.reason || '')}" placeholder="e.g. Daily operations sync" /></div><div class="field"><label for="request-start">Start</label><input id="request-start" name="startAt" type="datetime-local" required value="${startValue}" /></div><div class="field"><label for="request-end">Expected end</label><input id="request-end" name="endAt" type="datetime-local" required value="${endValue}" /></div><div class="field full"><label for="request-details">Additional details (optional)</label><textarea id="request-details" name="details" maxlength="500" placeholder="Add context for the current assignee">${escapeHtml(existing?.details || '')}</textarea></div></div>`,
+    existing ? 'Save changes' : 'Submit request', async (form) => {
+      const request = { id: existing?.id || id(), memberId: currentMemberId, type: form.get('type'), reason: form.get('reason').trim(), details: form.get('details').trim(), startAt: workspaceInputToIso(form.get('startAt')), endAt: workspaceInputToIso(form.get('endAt')) };
+      const error = validateRequestPeriod(request.startAt, request.endAt); if (error) throw new Error(error);
+      if (remoteMode) {
+        if (existing) await rpc('update_my_availability_request', { p_request_id: existing.id, p_type: request.type, p_reason: request.reason, p_details: request.details, p_start_at: request.startAt, p_end_at: request.endAt });
+        else await rpc('submit_availability_request', { p_type: request.type, p_reason: request.reason, p_details: request.details, p_start_at: request.startAt, p_end_at: request.endAt });
+      } else if (existing) {
+        Object.assign(existing, request);
+        logActivity(`${currentMember().name} updated an availability request.`, '↗');
+        saveDemoState();
+      } else {
+        Object.assign(request, { status: 'pending', createdAt: new Date().toISOString() });
+        state.requests.unshift(request);
+        logActivity(`${currentMember().name} submitted a ${REQUEST_TYPES[request.type]} request.`, '↗');
+        saveDemoState();
+      }
+      await refreshAfterAction(existing ? 'Your request was updated.' : 'Request submitted. It will remain pending until reviewed.');
+    });
+}
+
+function renderOwnAvailabilityRequestCard(request) {
+  const canEdit = request.status === 'pending';
+  const canWithdraw = request.status === 'pending' || (request.status === 'approved' && new Date(request.endAt).getTime() > Date.now());
+  const statusLabel = ({ pending: 'Awaiting review', approved: 'Approved', rejected: 'Declined', cancelled: 'Withdrawn by you' })[request.status] || request.status;
+  return `<article class="request-card"><span class="avatar">↗</span><div class="request-content"><strong>${escapeHtml(REQUEST_TYPES[request.type] || request.type)} · ${escapeHtml(statusLabel)}</strong><p>${escapeHtml(request.reason || 'No reason provided')} · ${prettyDateTime(request.startAt)} – ${prettyDateTime(request.endAt)}</p><span class="request-time">Submitted ${prettyDateTime(request.createdAt)}</span>${canEdit || canWithdraw ? `<div class="request-actions">${canEdit ? `<button class="button button-secondary" data-edit-own-request="${request.id}">Edit request</button>` : ''}${canWithdraw ? `<button class="button button-danger" data-withdraw-request="${request.id}">Withdraw request</button>` : ''}</div>` : ''}</div></article>`;
+}
+
+async function withdrawOwnRequest(requestId) {
+  const request = state.requests.find((item) => item.id === requestId && item.memberId === currentMemberId);
+  if (!request || !['pending', 'approved'].includes(request.status)) return toast('This request can no longer be withdrawn.', true);
+  if (request.status === 'approved' && new Date(request.endAt).getTime() <= Date.now()) return toast('This approved request has already ended; its history is retained.', true);
+  if (!window.confirm('Withdraw this request? If it is currently approved, you will become eligible again when your shift and presence also allow it.')) return;
+  try {
+    if (remoteMode) await rpc('withdraw_my_availability_request', { p_request_id: requestId });
+    else {
+      request.status = 'cancelled';
+      request.cancelledAt = new Date().toISOString();
+      logActivity(`${currentMember().name} withdrew an availability request.`, '↶');
+      saveDemoState();
+    }
+    await refreshAfterAction('Your request was withdrawn. Availability has been recalculated.');
+  } catch (error) {
+    toast(error.message || 'Unable to withdraw this request.', true);
+  }
 }
 
 function openShiftDialog(existingId = null) {
@@ -958,10 +1049,21 @@ async function respondShiftSwap(requestId, accept) {
 async function takeOver() {
   if (isCurrentAssignee()) return toast('You already own allocation responsibility.');
   try {
-    if (remoteMode) await rpc('take_over_allocation', {});
-    else { const old = currentAssignee(); state.handovers.unshift({ id: id(), fromMemberId: state.currentAssigneeId, toMemberId: currentMemberId, createdAt: new Date().toISOString() }); state.currentAssigneeId = currentMemberId; logActivity(`${currentMember().name} took over allocation from ${old?.name || 'the previous assignee'}.`, '⇄'); saveDemoState(); }
-    await refreshAfterAction('Allocation responsibility handed over to you. Pending requests are retained.');
-  } catch (error) { toast(error.message, true); }
+    if (remoteMode) {
+      const result = await rpc('take_over_allocation', {});
+      if (result?.current_assignee_id && result.current_assignee_id !== currentMemberId) throw new Error('The server did not assign allocation responsibility to your profile.');
+      await reloadRemote();
+      if (!isCurrentAssignee()) throw new Error('Takeover was not retained after eligibility checks. Withdraw any active approved unavailability request from My profile, confirm your shift is active, then try again.');
+    } else {
+      const old = currentAssignee();
+      state.handovers.unshift({ id: id(), fromMemberId: state.currentAssigneeId, toMemberId: currentMemberId, createdAt: new Date().toISOString() });
+      state.currentAssigneeId = currentMemberId;
+      logActivity(`${currentMember().name} took over allocation from ${old?.name || 'the previous assignee'}.`, '⇄');
+      saveDemoState();
+      renderApp();
+    }
+    toast('Allocation responsibility handed over to you. Pending requests are retained.');
+  } catch (error) { toast(error.message || 'Unable to take over allocation.', true); }
 }
 
 async function reviewRequest(requestId, decision) {

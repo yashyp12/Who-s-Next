@@ -44,6 +44,7 @@ The workspace supports:
 - Existing-ticket routing to colleagues in troubleshooting or meeting status while new email assignments require available status.
 - One-day shift swaps that take effect only after the invited colleague accepts.
 - Explicit allocation handover plus automatic handover when the owner leaves shift or becomes unavailable.
+- Members can edit their own pending requests and withdraw their own pending or currently active approved requests.
 - Server-attributed allocation history with recipient, assigner, optional subject/reference, and precise timestamp.
 - Realtime in-app notifications, optional sound, live refresh, workspace clock, reports, and CSV allocation export.
 - Self-recorded shift check-in and check-out history.
@@ -81,7 +82,7 @@ Use **Route existing ticket** when the recipient is in troubleshooting or meetin
 - Only the current allocation owner can approve or reject pending requests or record allocations.
 - The owner cannot review their own request.
 - Any mapped teammate may take over allocation responsibility.
-- Automatic handover selects the most recently started eligible colleague when the owner leaves shift or becomes unavailable.
+- Automatic handover rotates to the next eligible colleague in the departing owner's active shift by roster order, and falls back to another active shift only if needed.
 - Handover history is retained and pending requests remain available to the new owner.
 
 ## Allocation and availability rules
@@ -150,6 +151,10 @@ Do not run these steps against an existing production workspace without a backup
    supabase/migrations/202611020006_shift_aware_presence_and_ticket_routing.sql
    supabase/migrations/202611020007_workspace_admin_controls.sql
    supabase/migrations/202611020008_presence_break_roles.sql
+   supabase/migrations/202611020009_fix_workspace_refresh_trigger.sql
+   supabase/migrations/202611020010_request_withdrawal_and_takeover_guard.sql
+   supabase/migrations/202611020011_atomic_logout_handover.sql
+   supabase/migrations/202611020012_fix_withdrawal_lock_order.sql
    ```
 
 4. Edit `supabase/seed.sql` locally with the real roster and one unique random access code per member. Use codes of at least 16 characters, keep them out of Git, and share each code only with its matching colleague.
@@ -166,7 +171,7 @@ Do not run these steps against an existing production workspace without a backup
    Never put a Supabase `service_role` key in browser code.
 7. Confirm Realtime is enabled for the notification and workspace events required by the migrations.
 8. Test the deployment with fictional or approved test members before sharing individual access codes.
-
+ 
 If `site/config.js` has no public Supabase configuration, the app shows a clear unavailable/setup state and does not fabricate members or allocations.
 
 ## Deployment

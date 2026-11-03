@@ -31,8 +31,9 @@ test('mobile admin navigation has six columns and top actions can wrap', () => {
   assert.match(cssSource, /\.top-actions\s*\{[^}]*flex-wrap:\s*wrap/s);
 });
 
-test('workspace includes persistent sidebar controls, sign-out and shift auto check-in', () => {
-  assert.match(appSource, /id="sidebar-toggle"/);
+test('workspace keeps the sidebar visible and retains sign-out and shift auto check-in', () => {
+  assert.doesNotMatch(appSource, /id="sidebar-toggle"/);
+  assert.match(appSource, /const sidebarCollapsed = false/);
   assert.match(appSource, /id="profile-sign-out"/);
   assert.match(appSource, /set_member_offline/);
   assert.match(appSource, /await maybeAutoCheckIn\(\)/);
@@ -46,8 +47,8 @@ test('allocation history separates recipient, assigner, time and ticket details'
   assert.match(appSource, /allocation-log-item/);
 });
 
-test('compact layout controls do not overflow and sidebar can collapse', () => {
-  assert.match(cssSource, /\.layout\.sidebar-collapsed/);
+test('compact layout controls do not overflow and sidebar remains open', () => {
+  assert.match(cssSource, /\.layout\.sidebar-collapsed > \.sidebar \{ display: flex !important; \}/);
   assert.match(cssSource, /\.allocation-log-item/);
   assert.match(cssSource, /\.toolbar-actions/);
 });

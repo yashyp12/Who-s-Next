@@ -40,28 +40,29 @@ function relativeTime(value) {
 }
 
 function unlockAudio() {
-  if (audioContext) {
-    if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
-    return;
-  }
   try {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextClass) return;
-    audioContext = new AudioContextClass();
-    if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
-  } catch { /* Audio is optional; notification delivery must not depend on it. */ }
+    if (!audioContext && AudioContextClass) audioContext = new AudioContextClass();
+    if (audioContext?.state === 'suspended') audioContext.resume().catch(() => {});
+  } catch { /* Keep retrying on later user gestures; audio never blocks workspace actions. */ }
 }
 
-document.addEventListener('pointerdown', unlockAudio, { once: true, capture: true });
-document.addEventListener('keydown', unlockAudio, { once: true, capture: true });
+// Keep these listeners active: an early rejected AudioContext creation must not
+// permanently disable sound for the rest of the session.
+document.addEventListener('pointerdown', unlockAudio, { capture: true, passive: true });
+document.addEventListener('keydown', unlockAudio, { capture: true });
 
-function playNotificationSound() {
-  if (!soundEnabled || !audioContext) return;
+async function playNotificationSound() {
+  if (!soundEnabled) return;
+  if (!audioContext) unlockAudio();
+  const context = audioContext;
+  if (!context) return;
   try {
-    if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
-    const now = audioContext.currentTime;
-    const oscillator = audioContext.createOscillator();
-    const gain = audioContext.createGain();
+    if (context.state === 'suspended') await context.resume();
+    if (context.state !== 'running') return;
+    const now = context.currentTime;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
     oscillator.type = 'triangle';
     oscillator.frequency.setValueAtTime(660, now);
     oscillator.frequency.setValueAtTime(880, now + 0.13);
@@ -71,7 +72,7 @@ function playNotificationSound() {
     gain.gain.setValueAtTime(0.075, now + 0.12);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.39);
     oscillator.connect(gain);
-    gain.connect(audioContext.destination);
+    gain.connect(context.destination);
     oscillator.start(now);
     oscillator.stop(now + 0.4);
   } catch { /* Browser audio permissions must never interrupt workspace actions. */ }
@@ -109,8 +110,10 @@ function notifyNewItem(item) {
   rememberNotificationId(item.id);
   notifications = [item, ...notifications.filter((entry) => entry.id !== item.id)].slice(0, 30);
   renderList();
-  showLiveToast(item);
-  playNotificationSound();
+  // Keep background-screen notifications quiet visually; the sound remains
+  // available after the browser has granted audio playback from a user gesture.
+  if (document.visibilityState === 'visible' && document.hasFocus()) showLiveToast(item);
+  void playNotificationSound();
 }
 
 function renderList() {
@@ -154,7 +157,8 @@ function renderList() {
         if (error) throw error;
         item.readAt = new Date().toISOString();
         notifications = notifications.filter((entry) => entry.id !== notificationId);
-        if (!notifications.length) isOpen = false;
+        // Acknowledge the selected item and close the inbox immediately.
+        isOpen = false;
         renderList();
       } catch (error) {
         console.error('Unable to mark notification as read:', error);
@@ -163,8 +167,13 @@ function renderList() {
   });
 }
 
+let notificationFetchQueued = false;
 async function loadNotifications({ notify = false } = {}) {
-  if (!activeClient || !activeMemberId || notificationFetchInProgress) return;
+  if (!activeClient || !activeMemberId) return;
+  if (notificationFetchInProgress) {
+    notificationFetchQueued = notificationFetchQueued || notify;
+    return;
+  }
   notificationFetchInProgress = true;
   try {
     const { data, error } = await activeClient.rpc('get_my_notifications', { p_limit: 30 });
@@ -197,6 +206,10 @@ async function loadNotifications({ notify = false } = {}) {
     renderList();
   } finally {
     notificationFetchInProgress = false;
+    if (notificationFetchQueued) {
+      notificationFetchQueued = false;
+      queueMicrotask(() => loadNotifications({ notify: true }).catch((error) => console.error('Queued notification sync failed:', error)));
+    }
   }
 }
 
@@ -249,12 +262,12 @@ export function initializeNotificationCenter({ supabase, memberId }) {
     }, 3000);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
-        if (audioContext?.state === 'suspended') audioContext.resume().catch(() => {});
+        unlockAudio();
         loadNotifications({ notify: true }).catch((error) => console.error('Notification refresh failed:', error));
       }
     });
     window.addEventListener('focus', () => {
-      if (audioContext?.state === 'suspended') audioContext.resume().catch(() => {});
+      unlockAudio();
       loadNotifications({ notify: true }).catch((error) => console.error('Notification refresh failed:', error));
     });
   }
