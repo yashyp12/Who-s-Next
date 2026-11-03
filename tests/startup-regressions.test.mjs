@@ -176,3 +176,31 @@ test('today allocation log is height-constrained and independently scrollable', 
   assert.match(styles, /\.allocation-log-head \{[\s\S]*?position: sticky;[\s\S]*?top: 0/);
   assert.match(styles, /overscroll-behavior: contain/);
 });
+
+
+test('regular member workspace is scoped to the current day while admins retain historical visibility', () => {
+  assert.match(app, /function visibleMemberRequests\(\)/);
+  assert.match(app, /function visibleMemberAllocations\(\)/);
+  assert.match(app, /currentIsAdmin \? state\.allocations : state\.allocations\.filter/);
+  assert.match(app, /const floorDate = addCalendarDays\(localDate\(\), -1\)/);
+  assert.match(app, /function shiftForMember\(memberId, date = localDate\(\)\)/);
+  assert.match(app, /return overnight && localTime\(\) < overnight\.end \? overnight : null/);
+});
+
+test('daily workspace migration scopes member history and reconciles ownership after shift edits', async () => {
+  const migration = await readFile(new URL('../supabase/migrations/202611030014_daily_workspace_and_shift_consistency.sql', import.meta.url), 'utf8');
+  assert.match(migration, /public\.is_workspace_admin\(\) or \(a\.assigned_at at time zone v_workspace\.timezone\)::date = v_today/);
+  assert.match(migration, /status = 'pending' or \(status = 'approved' and end_at > now\(\)\)/);
+  assert.match(migration, /perform public\.ensure_shift_assignee\(\)/);
+  assert.match(migration, /create or replace function public\.get_dashboard\(\)/);
+});
+
+test('notification inbox can be dismissed without reopening the bell and Escape closes it', async () => {
+  const notifications = await readFile(new URL('../site/src/notifications.mjs', import.meta.url), 'utf8');
+  const styles = await readFile(new URL('../site/src/styles.css', import.meta.url), 'utf8');
+  assert.match(notifications, /id="notification-close"/);
+  assert.match(notifications, /event\.key === 'Escape'/);
+  assert.match(notifications, /!root\.contains\(event\.target\)/);
+  assert.match(styles, /\.notification-popover-close/);
+  assert.match(notifications, /exponentialRampToValueAtTime\(0\.22/);
+});
