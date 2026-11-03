@@ -178,6 +178,22 @@ test('today allocation log is height-constrained and independently scrollable', 
 });
 
 
+test('admins can set simple case-insensitive member access codes without exposing plaintext storage', async () => {
+  const app = await readFile(new URL('../site/src/app.mjs', import.meta.url), 'utf8');
+  const migration = await readFile(new URL('../supabase/migrations/202611030013_admin_custom_access_codes.sql', import.meta.url), 'utf8');
+  assert.match(app, /data-admin-set-code=/);
+  assert.match(app, /admin_set_member_access_code/);
+  assert.match(app, /\^\[A-Za-z0-9\._-\]\{8,40\}\$/);
+  assert.match(app, /minlength="8" maxlength="200"/);
+  assert.match(migration, /public\.admin_set_member_access_code\(p_member_id uuid, p_access_code text\)/);
+  assert.match(migration, /extensions\.digest\(v_normalized_code, 'sha256'\)/);
+  assert.match(migration, /auth_user_id <> auth\.uid\(\)/);
+  assert.match(migration, /public\.is_workspace_admin\(\)/);
+  assert.match(migration, /lower\(trim\(p_access_code\)\)/);
+  assert.doesNotMatch(migration, /insert into public\.member_access_codes[^;]*p_access_code/s);
+});
+
+
 test('regular member workspace is scoped to the current day while admins retain historical visibility', () => {
   assert.match(app, /function visibleMemberRequests\(\)/);
   assert.match(app, /function visibleMemberAllocations\(\)/);
@@ -236,8 +252,6 @@ test('long operational lists expose search controls and contained scroll areas',
 test('live workspace status banner is removed from the sidebar', () => {
   assert.doesNotMatch(app, /Live team workspace<br\/>Changes sync across browsers/);
 });
-
-
 test('access-code login accepts the admin-managed minimum length of eight characters', async () => {
   const app = await readFile(new URL('../site/src/app.mjs', import.meta.url), 'utf8');
   assert.match(app, /minlength="8"/);

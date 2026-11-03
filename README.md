@@ -155,6 +155,7 @@ Do not run these steps against an existing production workspace without a backup
    supabase/migrations/202611020010_request_withdrawal_and_takeover_guard.sql
    supabase/migrations/202611020011_atomic_logout_handover.sql
    supabase/migrations/202611020012_fix_withdrawal_lock_order.sql
+   supabase/migrations/202611030013_admin_custom_access_codes.sql
    supabase/migrations/202611030014_daily_workspace_and_shift_consistency.sql
    supabase/migrations/202611030015_admin_monthly_analytics.sql
    ```

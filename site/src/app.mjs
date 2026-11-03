@@ -726,7 +726,7 @@ function renderAdmin() {
       <input class="list-search" type="search" placeholder="Search team members…" data-filter-target=".admin-member-row" aria-label="Search team members" /><div class="schedule-list" data-filter-list>${adminRoster.length ? adminRoster.map((member) => {
         const shift = state.shifts.find((item) => item.memberId === member.id && item.date === localDate()) || null;
         const role = member.adminRole || 'none';
-        return `<article class="admin-member-row"><div class="admin-member-main"><span class="avatar">${initials(member.name)}</span><div><strong>${escapeHtml(member.name)}</strong><small>${member.active ? 'Active member' : 'Deactivated'} · ${shift ? `${shift.start}–${shift.end}` : 'No shift today'} · ${role === 'super_admin' ? 'Super Admin' : role === 'sme' ? 'SME' : 'Team member'}</small></div></div><div class="admin-member-actions"><select class="admin-role-select" id="admin-role-${member.id}" aria-label="Access role for ${escapeAttr(member.name)}"><option value="none" ${role === 'none' ? 'selected' : ''}>Member</option><option value="sme" ${role === 'sme' ? 'selected' : ''}>SME</option><option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>Super Admin</option></select><button class="button button-secondary button-small" data-admin-role-save="${member.id}">Save role</button><button class="button button-secondary button-small" data-admin-shift="${member.id}">Shift</button><button class="button button-secondary button-small" data-admin-name="${member.id}">Rename</button><button class="button button-secondary button-small" data-admin-rotate="${member.id}">New code</button><button class="button button-${member.active ? 'danger' : 'secondary'} button-small" data-admin-toggle="${member.id}" data-active="${member.active}">${member.active ? 'Deactivate' : 'Activate'}</button></div></article>`;
+        return `<article class="admin-member-row"><div class="admin-member-main"><span class="avatar">${initials(member.name)}</span><div><strong>${escapeHtml(member.name)}</strong><small>${member.active ? 'Active member' : 'Deactivated'} · ${shift ? `${shift.start}–${shift.end}` : 'No shift today'} · ${role === 'super_admin' ? 'Super Admin' : role === 'sme' ? 'SME' : 'Team member'}</small></div></div><div class="admin-member-actions"><select class="admin-role-select" id="admin-role-${member.id}" aria-label="Access role for ${escapeAttr(member.name)}"><option value="none" ${role === 'none' ? 'selected' : ''}>Member</option><option value="sme" ${role === 'sme' ? 'selected' : ''}>SME</option><option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>Super Admin</option></select><button class="button button-secondary button-small" data-admin-role-save="${member.id}">Save role</button><button class="button button-secondary button-small" data-admin-shift="${member.id}">Shift</button><button class="button button-secondary button-small" data-admin-name="${member.id}">Rename</button><button class="button button-secondary button-small" data-admin-set-code="${member.id}">Set code</button><button class="button button-${member.active ? 'danger' : 'secondary'} button-small" data-admin-toggle="${member.id}" data-active="${member.active}">${member.active ? 'Deactivate' : 'Activate'}</button></div></article>`;
       }).join('') : '<div class="empty-state">No members found. Add the first team member to get started.</div>'}</div>
     </section>
     <section class="panel admin-report-panel"><div class="panel-head"><div><div class="panel-title">Shift allocation report</div><div class="panel-subtitle">Fresh emails and existing tickets assigned per member.</div></div></div><div class="toolbar-actions"><div class="field"><label for="admin-report-date">Workspace date</label><input id="admin-report-date" type="date" value="${localDate()}"/></div><button class="button button-secondary" id="admin-run-report">Load report</button></div><div id="admin-shift-report" class="empty-state">Choose a date to view the allocation summary.</div></section>`;
@@ -749,17 +749,31 @@ function openAdminAddMemberDialog() {
   });
 }
 
-async function rotateMemberCode(memberId) {
+async function setMemberAccessCode(memberId) {
   const member = adminRoster.find((item) => item.id === memberId);
-  if (!member || !window.confirm(`Rotate the private access code for ${member.name}? Their existing sessions will be signed out.`)) return;
+  if (!member || !member.active) return toast('Only active members can have an access code changed.', true);
+  const code = window.prompt(
+    `Set a simple private access code for ${member.name}. Use 8–40 letters, numbers, dots, underscores or hyphens.`,
+    ''
+  );
+  if (code === null) return;
+  const normalized = code.trim();
+  if (!/^[A-Za-z0-9._-]{8,40}$/.test(normalized)) {
+    return toast('Access code must be 8–40 characters using letters, numbers, dots, underscores or hyphens.', true);
+  }
+  if (!window.confirm(`Save this access code for ${member.name}? Their other active sessions will be signed out.`)) return;
   try {
-    const { data, error } = await supabase.rpc('admin_rotate_member_access_code', { p_member_id: memberId });
+    const { error } = await supabase.rpc('admin_set_member_access_code', {
+      p_member_id: memberId,
+      p_access_code: normalized,
+    });
     if (error) throw error;
-    showOneTimeAccessCode(data.name, data.access_code);
     adminRosterLoaded = false;
     await loadAdminRoster();
-    toast('Access code rotated. Share the new code privately.');
-  } catch (error) { toast(error.message || 'Unable to rotate access code.', true); }
+    toast(`Access code updated for ${member.name}. Share it privately.`);
+  } catch (error) {
+    toast(error.message || 'Unable to update access code.', true);
+  }
 }
 
 async function saveAdminRole(memberId) {
@@ -958,7 +972,7 @@ function bindViewActions() {
   $('#analytics-month')?.addEventListener('change', (event) => loadAdminAnalytics(event.target.value));
   $('#admin-add-member')?.addEventListener('click', openAdminAddMemberDialog);
   $('#admin-run-report')?.addEventListener('click', runAdminShiftReport);
-  document.querySelectorAll('[data-admin-rotate]').forEach((button) => button.addEventListener('click', () => rotateMemberCode(button.dataset.adminRotate)));
+  document.querySelectorAll('[data-admin-set-code]').forEach((button) => button.addEventListener('click', () => setMemberAccessCode(button.dataset.adminSetCode)));
   document.querySelectorAll('[data-admin-toggle]').forEach((button) => button.addEventListener('click', () => toggleMemberActive(button.dataset.adminToggle, button.dataset.active === 'true')));
   document.querySelectorAll('[data-admin-name]').forEach((button) => button.addEventListener('click', () => renameMember(button.dataset.adminName)));
   document.querySelectorAll('[data-admin-shift]').forEach((button) => button.addEventListener('click', () => openAdminShiftDialog(button.dataset.adminShift)));
