@@ -13,9 +13,9 @@ declare
   v_member_name text;
 begin
   if auth.uid() is null then raise exception 'A workspace session is required.'; end if;
-  if p_access_code is null or length(trim(p_access_code)) < 8 or length(trim(p_access_code)) > 40
+  if p_access_code is null or length(trim(p_access_code)) < 8 or length(trim(p_access_code)) > 200
      or trim(p_access_code) !~ '^[A-Za-z0-9._-]+$' then
-    raise exception 'Enter a valid individual access code (8-40 letters, numbers, dots, underscores or hyphens).';
+    raise exception 'Enter a valid individual access code (8-200 letters, numbers, dots, underscores or hyphens).';
   end if;
 
   select c.member_id, c.workspace_id, m.name
