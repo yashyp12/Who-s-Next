@@ -196,18 +196,19 @@ test('admins can set simple case-insensitive member access codes without exposin
 
 test('browser-native alert, confirm and prompt dialogs are not used by the application', async () => {
   const app = await readFile(new URL('../site/src/app.mjs', import.meta.url), 'utf8');
-  assert.doesNotMatch(app, /\\b(?:window\\.)?(?:alert|confirm|prompt)\\s*\\(/);
-  assert.match(app, /function openUtilityDialog\\(/);
-  assert.match(app, /dialog\\.showModal\\(\\)/);
+  assert.doesNotMatch(app, /\b(?:window\.)?(?:alert|confirm|prompt)\s*\(/);
+  assert.match(app, /function openUtilityDialog\(/);
+  assert.match(app, /dialog\.showModal\(\)/);
 });
 
-test('utility dialog is present, labelled, and supports cancellation', async () => {
+test('utility dialog is present, labelled, styled, and supports cancellation', async () => {
   const html = await readFile(new URL('../site/index.html', import.meta.url), 'utf8');
   const app = await readFile(new URL('../site/src/app.mjs', import.meta.url), 'utf8');
   const styles = await readFile(new URL('../site/src/styles.css', import.meta.url), 'utf8');
   assert.match(html, /id="utility-dialog"/);
-  assert.match(html, /id="utility-dialog-content"/);
-  assert.match(app, /dialog\\.addEventListener\\('cancel', onCancel\\)/);
-  assert.match(app, /dialog\\.removeEventListener\\('cancel', onCancel\\)/);
-  assert.match(styles, /\\.utility-dialog::backdrop/);
+  assert.match(html, /aria-labelledby="utility-dialog-title"/);
+  assert.match(app, /id="utility-dialog-title"/);
+  assert.match(app, /dialog\.addEventListener\('cancel', onCancel\)/);
+  assert.match(app, /dialog\.removeEventListener\('cancel', onCancel\)/);
+  assert.match(styles, /\.utility-dialog::backdrop/);
 });
