@@ -47,8 +47,8 @@ begin
   by_member as (
     select m.id, m.name,
       count(f.id)::integer as amount,
-      count(f.id) filter (where f.allocation_kind = 'new_email')::integer as new_emails,
-      count(f.id) filter (where f.allocation_kind = 'existing_ticket')::integer as existing_tickets
+      (count(f.id) filter (where f.allocation_kind = 'new_email'))::integer as new_emails,
+      (count(f.id) filter (where f.allocation_kind = 'existing_ticket'))::integer as existing_tickets
     from public.members m
     left join filtered f on f.recipient_member_id = m.id
     where m.workspace_id = v_workspace_id
