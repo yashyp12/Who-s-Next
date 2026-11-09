@@ -835,7 +835,7 @@ body {
 .intro-tour-footer { margin-top:16px;align-items:center; }
 .intro-tour-actions { flex:0 0 auto; }
 .tour-target-active {
-  z-index:5!important;outline:2px solid var(--accent)!important;
+  z-index:10002!important;outline:2px solid var(--accent)!important;
   outline-offset:3px!important;box-shadow:0 0 0 4px #d1f36a18!important;
 }
 @media(max-width:600px) {
