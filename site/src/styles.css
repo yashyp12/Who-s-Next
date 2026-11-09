@@ -816,3 +816,35 @@ body {
   .schedule-list,.request-list,.queue-list,.activity-list,.analytics-agent-list,
   .allocation-log,.analytics-record-list,.notification-items,.table-wrap { scroll-behavior:smooth; }
 }
+
+
+/* Final consistency pass: keyboard clarity, restrained hover feedback, and shared spacing. */
+:where(button,a,input,select,textarea,[tabindex]):focus-visible {
+  outline:2px solid var(--accent);
+  outline-offset:3px;
+}
+:where(button,a):focus:not(:focus-visible) { outline:none; }
+.button,.nav button,.icon-button,.notification-trigger {
+  -webkit-tap-highlight-color:transparent;
+}
+.button:not(:disabled),.nav button,.icon-button,.notification-trigger {
+  transition:background-color .16s ease,border-color .16s ease,color .16s ease,box-shadow .16s ease;
+}
+.panel,.stat-card,.report-card {
+  min-width:0;
+}
+.team-table tbody tr:hover td {
+  background:#ffffff05;
+}
+.team-table tbody tr:last-child:hover td:first-child { border-bottom-left-radius:8px; }
+.team-table tbody tr:last-child:hover td:last-child { border-bottom-right-radius:8px; }
+.page-toolbar,.greeting-row { min-width:0; }
+.toolbar-actions { align-items:center; }
+.field input:hover,.field select:hover,.field textarea:hover {
+  border-color:#526579;
+}
+@media(prefers-reduced-motion:reduce) {
+  .button,.nav button,.icon-button,.notification-trigger {
+    transition:none!important;
+  }
+}
