@@ -816,31 +816,3 @@ body {
   .schedule-list,.request-list,.queue-list,.activity-list,.analytics-agent-list,
   .allocation-log,.analytics-record-list,.notification-items,.table-wrap { scroll-behavior:smooth; }
 }
-
-/* A compact, non-blocking guide: the workspace remains visible while users learn. */
-.intro-tour-backdrop {
-  background:rgba(4,8,13,.12);backdrop-filter:none;pointer-events:none;
-}
-.intro-tour-card {
-  left:auto;right:24px;bottom:24px;transform:none;
-  width:min(390px,calc(100vw - 32px));padding:18px;
-  border:1px solid #3b4b5b;border-radius:14px;
-  background:#17212c;box-shadow:0 16px 48px #0008;
-}
-.intro-tour-topline { font-size:9px;letter-spacing:.9px; }
-.intro-tour-progress { margin:10px 0 14px; }
-.intro-tour-kicker { margin-bottom:6px; }
-.intro-tour-card h2 { font-size:18px;line-height:1.3;margin-bottom:7px; }
-.intro-tour-card p { font-size:12px;line-height:1.55; }
-.intro-tour-footer { margin-top:16px;align-items:center; }
-.intro-tour-actions { flex:0 0 auto; }
-.tour-target-active {
-  z-index:10002!important;outline:2px solid var(--accent)!important;
-  outline-offset:3px!important;box-shadow:0 0 0 4px #d1f36a18!important;
-}
-@media(max-width:600px) {
-  .intro-tour-card { right:12px;bottom:12px;width:calc(100vw - 24px);padding:15px; }
-  .intro-tour-card h2 { font-size:17px; }
-  .intro-tour-footer { gap:8px; }
-  .intro-tour-actions { gap:6px; }
-}
