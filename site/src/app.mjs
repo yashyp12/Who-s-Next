@@ -23,6 +23,9 @@ let adminAnalyticsMonth = '';
 let adminAnalyticsLoading = false;
 let adminAnalyticsError = '';
 let adminAnalyticsRequestId = 0;
+let adminAnalyticsGranularity = 'daily';
+let adminAnalyticsAgentFilter = 'all';
+let adminAnalyticsKindFilter = 'all';
 let workspaceId = null;
 let realtimeChannel = null;
 let presenceTimer = null;
@@ -765,7 +768,7 @@ function renderOverview(me, assignee, counts, statuses) {
       </section>
     </div>
     <section class="panel team-panel" style="margin-bottom:16px"><div class="panel-head"><div><div class="panel-title">Team availability</div><div class="panel-subtitle">Eligibility is recalculated from the current shift and approved time windows</div></div><span class="panel-subtitle">${counts.available} available / ${statuses.length} total</span></div>
-      <div class="table-wrap${statuses.length > 8 ? ' table-wrap-vertical' : ''}" role="region" aria-label="Team availability roster" tabindex="${statuses.length > 8 ? '0' : '-1'}"><table class="team-table"><thead><tr><th>Team member</th><th>Presence</th><th>Shift</th><th>Status</th><th>Reason</th><th>Expected return</th></tr></thead><tbody>${statuses.map(({ member, status, presence }) => `<tr><td><div class="employee-cell"><span class="avatar">${initials(member.name)}</span><div><strong>${escapeHtml(member.name)}</strong><small>${member.id === currentMemberId ? 'You' : 'Team member'}</small></div></div></td><td><span class="presence-pill presence-${presence}">${presence === 'active' ? 'Active' : presence === 'away' ? 'Away' : 'Offline'}</span></td><td>${member.shift ? `${member.shift.start} – ${member.shift.end}` : '—'}</td><td>${statusPill(status)}</td><td>${escapeHtml(status.reason)}</td><td class="return-time">${returnLabel(status)}</td></tr>`).join('')}</tbody></table></div>
+      <div class="table-wrap" role="region" aria-label="Team availability roster" tabindex="0"><table class="team-table"><thead><tr><th>Team member</th><th>Presence</th><th>Shift</th><th>Status</th><th>Reason</th><th>Expected return</th></tr></thead><tbody>${statuses.map(({ member, status, presence }) => `<tr><td><div class="employee-cell"><span class="avatar">${initials(member.name)}</span><div><strong>${escapeHtml(member.name)}</strong><small>${member.id === currentMemberId ? 'You' : 'Team member'}</small></div></div></td><td><span class="presence-pill presence-${presence}">${presence === 'active' ? 'Active' : presence === 'away' ? 'Away' : 'Offline'}</span></td><td>${member.shift ? `${member.shift.start} – ${member.shift.end}` : '—'}</td><td>${statusPill(status)}</td><td>${escapeHtml(status.reason)}</td><td class="return-time">${returnLabel(status)}</td></tr>`).join('')}</tbody></table></div>
     </section>
     <div class="bottom-grid"><section class="panel"><div class="panel-head"><div><div class="panel-title">Requests to review</div><div class="panel-subtitle">Pending requests transfer with the assignee handover</div></div><button class="text-link" data-go="requests">View all →</button></div><input class="list-search" type="search" placeholder="Search pending requests…" data-filter-target=".request-card" aria-label="Search pending requests" /><div class="request-list" data-filter-list>${pending.length ? pending.map(renderRequestCard).join('') : '<div class="empty-state">No pending requests. Your approval queue is clear.</div>'}</div></section>
       <section class="panel"><div class="panel-head"><div><div class="panel-title">Recent allocation activity</div><div class="panel-subtitle">Latest assignments recorded</div></div><button class="text-link" data-go="reports">View reports →</button></div><div class="activity-list">${allocations.length ? allocations.map((item) => { const recipient = state.members.find((m) => m.id === item.memberId); const assigner = state.members.find((m) => m.id === item.assignedBy); return `<div class="activity-item"><span class="activity-icon">⇄</span><div class="activity-copy"><p><strong>${escapeHtml(recipient?.name || 'Unknown member')}</strong> received an allocation from ${escapeHtml(assigner?.name || 'Unknown assignee')} ${item.reference ? `· ${escapeHtml(item.reference)}` : ''}</p><small>${prettyDateTime(item.assignedAt)}</small></div></div>`; }).join('') : '<div class="empty-state">No allocations have been recorded yet.</div>'}</div></section></div>`;
@@ -781,7 +784,7 @@ function renderSchedule(me) {
   const floorDate = addCalendarDays(localDate(), -1);
   const shifts = state.shifts.filter((shift) => shift.memberId === currentMemberId && (currentIsAdmin || shift.date >= floorDate)).sort((a, b) => a.date.localeCompare(b.date));
   const breaks = state.breaks.filter((item) => item.memberId === currentMemberId && (currentIsAdmin || item.date >= floorDate)).sort((a, b) => `${a.date}${a.start}`.localeCompare(`${b.date}${b.start}`));
-  return `<div class="page-toolbar"><div><div class="panel-title">Your shifts & breaks</div><div class="panel-subtitle">Manage only your own schedule. Changes are retained in history.</div></div><div class="toolbar-actions"><button class="button button-secondary" id="add-break">＋ Add break</button><button class="button button-secondary" id="new-shift-swap">⇄ Request swap</button><button class="button button-primary" id="set-shift">＋ Set shift</button></div></div>
+  return `<div class="page-toolbar"><div><div class="panel-title">Your shifts & breaks</div><div class="panel-subtitle">Manage only your own schedule. Changes are retained in history.</div></div><div class="toolbar-actions schedule-toolbar-actions"><button class="button button-secondary" id="add-break">＋ Add break</button><button class="button button-secondary" id="new-shift-swap">⇄ Request swap</button><button class="button button-primary" id="set-shift">＋ Set shift</button></div></div>
     <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Scheduled shifts</div><div class="panel-subtitle">${shifts.length} shift record(s)</div></div></div><input class="list-search" type="search" placeholder="Search shifts by date or shift type…" data-filter-target=".schedule-row" aria-label="Search shifts" /><div class="schedule-list" data-filter-list>${shifts.length ? shifts.map((shift) => `<div class="schedule-row"><div><strong>${prettyDate(shift.date)}</strong><small style="display:block">${escapeHtml(SHIFT_PRESETS[shift.key]?.label || shift.key || 'Custom shift')}</small></div><div>${shift.start}</div><div>${shift.end}</div><div><button class="button button-secondary button-small" data-edit-shift="${shift.id}">Edit</button></div></div>`).join('') : '<div class="empty-state">No shifts have been entered. Add your first shift to appear in the team schedule.</div>'}</div></section>
     <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">Planned breaks</div><div class="panel-subtitle">60 minutes total per shift. Additional time needs SME or Super Admin approval.</div></div></div><input class="list-search" type="search" placeholder="Search planned breaks…" data-filter-target=".schedule-row" aria-label="Search breaks" /><div class="schedule-list" data-filter-list>${breaks.length ? breaks.map((item) => `<div class="schedule-row"><div><strong>${prettyDate(item.date)}</strong><small style="display:block">${item.breakType === 'meal' ? 'Meal break' : 'BioBreak'} · ${escapeHtml(item.note || 'Scheduled break')}</small></div><div>${item.start}</div><div>${item.end}</div><div><span class="status muted">Scheduled</span></div></div>`).join('') : '<div class="empty-state">No breaks planned yet.</div>'}</div></section>
     <section class="panel" style="margin-bottom:15px"><div class="panel-head"><div><div class="panel-title">My availability requests</div><div class="panel-subtitle">Edit pending requests or withdraw your own pending and active approved requests. Old reviewed history is retained for Super Admin / SME.</div></div><button class="button button-primary button-small" id="new-request-profile">＋ New request</button></div><input class="list-search" type="search" placeholder="Search your requests…" data-filter-target=".request-card" aria-label="Search availability requests" /><div class="request-list" data-filter-list>${visibleMemberRequests().filter((request) => request.memberId === currentMemberId).sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt)).length ? visibleMemberRequests().filter((request) => request.memberId === currentMemberId).sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt)).map(renderOwnAvailabilityRequestCard).join('') : '<div class="empty-state">You have not submitted any availability requests.</div>'}</div></section>
@@ -1031,6 +1034,21 @@ async function loadAdminAnalytics(month) {
   }
 }
 
+function analyticsDaysForView(days = []) {
+  if (adminAnalyticsGranularity !== 'weekly') return days;
+  const groups = new Map();
+  for (const item of days) {
+    const date = new Date(String(item.date || (adminAnalyticsMonth + '-01')) + 'T12:00:00Z');
+    const monday = new Date(date);
+    monday.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+    const key = monday.toISOString().slice(0, 10);
+    const label = 'Week of ' + key.slice(8, 10) + ' ' + new Intl.DateTimeFormat('en', { month: 'short', timeZone: 'UTC' }).format(monday);
+    const group = groups.get(key) || { date: key, day: label, count: 0 };
+    group.count += Number(item.count) || 0;
+    groups.set(key, group);
+  }
+  return [...groups.values()];
+}
 function renderMiniLineChart(days = []) {
   const values = days.map((item) => Number(item.count) || 0);
   const max = Math.max(1, ...values);
@@ -1087,6 +1105,145 @@ function exportMonthlyAllocationCsv() {
   if (records.length >= 1500) toast('CSV exported. This report currently includes the latest 1,500 allocation records.');
 }
 
+async function exportAdminAnalyticsExcel() {
+  if (!adminAnalytics) return toast('Load a monthly report before exporting.', true);
+  const button = $('#export-analytics-xlsx');
+  if (button) { button.disabled = true; button.textContent = 'Preparing workbook…'; }
+  try {
+    const module = await import('https://esm.sh/exceljs@4.4.0?bundle');
+    const ExcelJS = module.default || module;
+    const data = adminAnalytics;
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "WHO'S next";
+    workbook.subject = 'Allocation analytics ' + adminAnalyticsMonth;
+    workbook.created = new Date();
+
+    const dashboard = workbook.addWorksheet('Dashboard', { views: [{ showGridLines: false }] });
+    dashboard.mergeCells('A1:H1');
+    dashboard.getCell('A1').value = "WHO'S next | Operations dashboard";
+    dashboard.getCell('A1').font = { name: 'Aptos Display', size: 20, bold: true, color: { argb: 'FF17212B' } };
+    dashboard.getCell('A2').value = 'Reporting month: ' + adminAnalyticsMonth + ' | Generated: ' + new Date().toLocaleString();
+    dashboard.getCell('A2').font = { italic: true, color: { argb: 'FF64748B' } };
+    const kpis = [
+      ['Metric', 'Value'],
+      ['Total allocations', Number(data.total || 0)],
+      ['New emails', Number(data.newEmails || 0)],
+      ['Existing tickets', Number(data.existingTickets || 0)],
+      ['Agents with allocations', Number(data.activeAgents || 0)]
+    ];
+    kpis.forEach((row, index) => { dashboard.getRow(index + 4).values = row; });
+    dashboard.getRow(4).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    dashboard.getRow(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF263746' } };
+    dashboard.getColumn(1).width = 28;
+    dashboard.getColumn(2).width = 22;
+    for (let col = 3; col <= 12; col += 1) dashboard.getColumn(col).width = 14;
+    dashboard.getCell('A9').value = 'Allocation history detail rows (latest 1,500 maximum): ' + (data.records || []).length;
+    dashboard.getCell('A9').font = { italic: true, color: { argb: 'FF64748B' } };
+    for (let row = 5; row <= 8; row += 1) dashboard.getCell(row, 2).font = { bold: true, size: 14, color: { argb: 'FF263746' } };
+
+    const agents = workbook.addWorksheet('Agent performance');
+    agents.columns = [
+      { header: 'Rank', key: 'rank', width: 10 }, { header: 'Agent', key: 'agent', width: 28 },
+      { header: 'Total allocations', key: 'total', width: 20 }, { header: 'New emails', key: 'emails', width: 15 },
+      { header: 'Existing tickets', key: 'tickets', width: 18 }, { header: 'Workload share', key: 'share', width: 18 }
+    ];
+    [...(data.members || [])].sort((a, b) => Number(b.count) - Number(a.count)).forEach((m, index) => agents.addRow({
+      rank: index + 1, agent: m.name, total: Number(m.count) || 0, emails: Number(m.newEmails) || 0,
+      tickets: Number(m.existingTickets) || 0, share: data.total ? Number(m.count || 0) / Number(data.total) : 0
+    }));
+    agents.autoFilter = { from: 'A1', to: 'F1' };
+    agents.views = [{ state: 'frozen', ySplit: 1 }];
+    agents.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    agents.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF263746' } };
+    agents.getColumn(6).numFmt = '0.0%';
+
+    const history = workbook.addWorksheet('Allocation history');
+    history.columns = [
+      { header: 'Work date', key: 'day', width: 18 }, { header: 'Assigned at', key: 'assignedAt', width: 25 },
+      { header: 'Recipient', key: 'recipient', width: 24 }, { header: 'Assigned by', key: 'assigner', width: 24 },
+      { header: 'Reference', key: 'reference', width: 22 }, { header: 'Subject', key: 'subject', width: 38 },
+      { header: 'Allocation type', key: 'kind', width: 20 }
+    ];
+    (data.records || []).forEach(item => history.addRow({
+      day: item.day, assignedAt: item.assignedAt ? new Date(item.assignedAt) : '',
+      recipient: item.recipient, assigner: item.assigner, reference: item.reference || '',
+      subject: item.subject || '', kind: item.kind
+    }));
+    history.autoFilter = { from: 'A1', to: 'G1' };
+    history.views = [{ state: 'frozen', ySplit: 1 }];
+    history.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    history.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF263746' } };
+    history.getColumn(2).numFmt = 'dd mmm yyyy hh:mm:ss';
+
+    // Render portable PNG chart snapshots so the Dashboard sheet displays visuals in Excel.
+    const makeChartPng = (kind) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 900; canvas.height = 420;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#17212b'; ctx.font = 'bold 25px Arial';
+      if (kind === 'mix') {
+        ctx.fillText('Allocation mix', 32, 42);
+        const email = Number(data.newEmails || 0);
+        const ticket = Number(data.existingTickets || 0);
+        const total = Math.max(1, email + ticket);
+        const cx = 240, cy = 230, radius = 125;
+        ctx.lineWidth = 54; ctx.strokeStyle = '#70c7ee';
+        ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = '#a6d94d'; ctx.beginPath();
+        ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * email / total)); ctx.stroke();
+        ctx.fillStyle = '#17212b'; ctx.font = 'bold 34px Arial'; ctx.textAlign = 'center';
+        ctx.fillText(String(email + ticket), cx, cy + 10);
+        ctx.textAlign = 'left'; ctx.font = '20px Arial'; ctx.fillStyle = '#17212b';
+        ctx.fillText('New emails: ' + email, 450, 190);
+        ctx.fillText('Existing tickets: ' + ticket, 450, 235);
+      } else {
+        ctx.fillText('Daily allocation trend', 32, 42);
+        const days = data.days || [];
+        const values = days.map(d => Number(d.count) || 0);
+        const max = Math.max(1, ...values);
+        const left = 55, right = 850, top = 90, bottom = 340;
+        ctx.strokeStyle = '#d7dee6'; ctx.lineWidth = 2; ctx.beginPath();
+        ctx.moveTo(left, bottom); ctx.lineTo(right, bottom); ctx.stroke();
+        ctx.strokeStyle = '#a6d94d'; ctx.lineWidth = 5; ctx.beginPath();
+        values.forEach((v, i) => {
+          const x = values.length <= 1 ? left : left + i * (right - left) / (values.length - 1);
+          const y = bottom - v / max * (bottom - top);
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke(); ctx.fillStyle = '#a6d94d';
+        values.forEach((v, i) => {
+          const x = values.length <= 1 ? left : left + i * (right - left) / (values.length - 1);
+          const y = bottom - v / max * (bottom - top);
+          ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+        });
+        ctx.fillStyle = '#64748b'; ctx.font = '16px Arial';
+        ctx.fillText(days[0]?.day || '', left, bottom + 35);
+        ctx.textAlign = 'right'; ctx.fillText(days.at(-1)?.day || '', right, bottom + 35);
+      }
+      return canvas.toDataURL('image/png');
+    };
+    const trendId = workbook.addImage({ base64: makeChartPng('trend'), extension: 'png' });
+    const mixId = workbook.addImage({ base64: makeChartPng('mix'), extension: 'png' });
+    dashboard.addImage(trendId, { tl: { col: 0, row: 10 }, ext: { width: 560, height: 275 } });
+    dashboard.addImage(mixId, { tl: { col: 8, row: 10 }, ext: { width: 560, height: 275 } });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url; anchor.download = 'whos-next-analytics-' + adminAnalyticsMonth + '.xlsx';
+    document.body.append(anchor); anchor.click(); anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+    toast('Excel workbook exported with dashboard charts and data sheets.');
+  } catch (error) {
+    console.error('Excel export failed:', error);
+    toast('Excel export could not be generated. Retry or use the CSV exports.', true);
+  } finally {
+    if (button) { button.disabled = false; button.textContent = '↓ Export Excel workbook'; }
+  }
+}
+
 function renderAdminAnalytics() {
   const data = adminAnalytics;
   const month = adminAnalyticsMonth || localDate().slice(0,7);
@@ -1106,9 +1263,9 @@ function renderAdminAnalytics() {
   const agentRows = members.map((item, index) => {
     const count = Number(item.count) || 0;
     const share = total ? count / total * 100 : 0;
-    return `<tr class="agent-performance-row"><td><span class="report-rank">${index + 1}</span></td><td><strong>${escapeHtml(item.name)}</strong></td><td>${Number(item.newEmails) || 0}</td><td>${Number(item.existingTickets) || 0}</td><td><strong>${count}</strong></td><td><div class="report-share"><span><i style="width:${Math.min(100, share)}%"></i></span><small>${share.toFixed(1)}%</small></div></td></tr>`;
+    return `<tr class="agent-performance-row" data-agent-id="${escapeAttr(item.id || item.name)}" ${adminAnalyticsAgentFilter !== 'all' && (item.id || item.name) !== adminAnalyticsAgentFilter ? 'hidden' : ''}><td><span class="report-rank">${index + 1}</span></td><td><strong>${escapeHtml(item.name)}</strong></td><td>${Number(item.newEmails) || 0}</td><td>${Number(item.existingTickets) || 0}</td><td><strong>${count}</strong></td><td><div class="report-share"><span><i style="width:${Math.min(100, share)}%"></i></span><small>${share.toFixed(1)}%</small></div></td></tr>`;
   }).join('');
-  const recordRows = records.map((item) => `<tr class="allocation-history-row"><td>${escapeHtml(item.day)}</td><td><strong>${escapeHtml(item.recipient)}</strong></td><td>${escapeHtml(item.assigner)}</td><td>${escapeHtml(item.reference || '—')}</td><td>${escapeHtml(item.subject || '—')}</td><td><span class="report-type-pill ${item.kind === 'Existing ticket' ? 'ticket' : 'email'}">${escapeHtml(item.kind)}</span></td><td>${escapeHtml(prettyDateTime(item.assignedAt))}</td></tr>`).join('');
+  const recordRows = records.map((item) => `<tr class="allocation-history-row" data-agent-id="${escapeAttr((members.find((member) => member.name === item.recipient)?.id) || item.recipient)}" data-kind="${item.kind === 'Existing ticket' ? 'ticket' : 'email'}" ${adminAnalyticsAgentFilter !== 'all' && ((members.find((member) => member.name === item.recipient)?.id) || item.recipient) !== adminAnalyticsAgentFilter ? 'hidden' : ''} ${adminAnalyticsKindFilter !== 'all' && (item.kind === 'Existing ticket' ? 'ticket' : 'email') !== adminAnalyticsKindFilter ? 'hidden' : ''}><td>${escapeHtml(item.day)}</td><td><strong>${escapeHtml(item.recipient)}</strong></td><td>${escapeHtml(item.assigner)}</td><td>${escapeHtml(item.reference || '—')}</td><td>${escapeHtml(item.subject || '—')}</td><td><span class="report-type-pill ${item.kind === 'Existing ticket' ? 'ticket' : 'email'}">${escapeHtml(item.kind)}</span></td><td>${escapeHtml(prettyDateTime(item.assignedAt))}</td></tr>`).join('');
 
   return `<div class="reports-shell">
     <section class="reports-heading">
@@ -1122,8 +1279,9 @@ function renderAdminAnalytics() {
       <article class="report-card"><small>Existing tickets</small><strong>${tickets.toLocaleString()}</strong><span>${ticketShare}% of workload</span></article>
       <article class="report-card"><small>Agents with allocations</small><strong>${Number(data.activeAgents || 0)}</strong><span>At least one allocation</span></article>
     </section>
+    <div class="analytics-filter-bar" aria-label="Report filters"><label>Chart view<select id="analytics-granularity"><option value="daily" ${adminAnalyticsGranularity === 'daily' ? 'selected' : ''}>Daily</option><option value="weekly" ${adminAnalyticsGranularity === 'weekly' ? 'selected' : ''}>Weekly</option></select></label><label>Agent · tables<select id="analytics-agent-filter"><option value="all">All agents</option>${members.map((m) => '<option value="' + escapeAttr(m.id || m.name) + '" ' + (adminAnalyticsAgentFilter === (m.id || m.name) ? 'selected' : '') + '>' + escapeHtml(m.name) + '</option>').join('')}</select></label><label>Work type · history<select id="analytics-kind-filter"><option value="all" ${adminAnalyticsKindFilter === 'all' ? 'selected' : ''}>All work</option><option value="email" ${adminAnalyticsKindFilter === 'email' ? 'selected' : ''}>New emails</option><option value="ticket" ${adminAnalyticsKindFilter === 'ticket' ? 'selected' : ''}>Existing tickets</option></select></label><button class="button button-secondary button-small" id="export-analytics-xlsx" type="button">↓ Export Excel workbook</button></div>
     <div class="analytics-grid reports-insights">
-      <section class="panel analytics-wide"><div class="panel-head"><div><div class="panel-title">Daily allocation trend</div><div class="panel-subtitle">Workload recorded across the selected month</div></div></div>${renderMiniLineChart(data.days || [])}</section>
+      <section class="panel analytics-trend-panel"><div class="panel-head"><div><div class="panel-title">${adminAnalyticsGranularity === 'weekly' ? 'Weekly' : 'Daily'} allocation trend</div><div class="panel-subtitle">Team workload · ${adminAnalyticsGranularity === 'weekly' ? 'grouped by week' : 'day by day'}</div></div></div>${renderMiniLineChart(analyticsDaysForView(data.days || []))}</section>
       <section class="panel report-mix-panel"><div class="panel-head"><div><div class="panel-title">Allocation mix</div><div class="panel-subtitle">Distribution by work type</div></div></div>
         <div class="report-mix-bar" role="img" aria-label="${emailShare}% new emails and ${ticketShare}% existing tickets"><span style="width:${emailShare}%"></span><i style="width:${ticketShare}%"></i></div>
         <div class="report-mix-legend"><div><i class="mix-email"></i><span>New emails</span><strong>${newEmails}</strong></div><div><i class="mix-ticket"></i><span>Existing tickets</span><strong>${tickets}</strong></div></div>
@@ -1132,12 +1290,12 @@ function renderAdminAnalytics() {
     <section class="panel report-data-panel">
       <div class="panel-head report-panel-heading"><div><div class="panel-title">Agent performance</div><div class="panel-subtitle">Ranked by allocation volume · highest workload first</div></div><button class="button button-secondary button-small" id="export-agent-csv" type="button" ${members.length ? '' : 'disabled'}>↓ Export agent CSV</button></div>
       <div class="report-table-toolbar"><input class="list-search" type="search" placeholder="Search agents…" data-filter-target=".agent-performance-row" aria-label="Search agent performance" /><span>${members.length} team members</span></div>
-      <div class="table-wrap report-table-wrap${members.length > 8 ? ' table-wrap-vertical' : ''}" role="region" aria-label="Agent performance table" tabindex="0"><table class="team-table report-table"><thead><tr><th>Rank</th><th>Agent</th><th>New emails</th><th>Existing tickets</th><th>Total</th><th>Workload share</th></tr></thead><tbody>${agentRows || '<tr><td colspan="6"><div class="report-empty-state"><strong>No agent data for this month</strong><span>Try another reporting month.</span></div></td></tr>'}</tbody></table></div>
+      <div class="table-wrap report-table-wrap" role="region" aria-label="Agent performance table" tabindex="0"><table class="team-table report-table"><thead><tr><th>Rank</th><th>Agent</th><th>New emails</th><th>Existing tickets</th><th>Total</th><th>Workload share</th></tr></thead><tbody>${agentRows || '<tr><td colspan="6"><div class="report-empty-state"><strong>No agent data for this month</strong><span>Try another reporting month.</span></div></td></tr>'}</tbody></table></div>
     </section>
     <section class="panel report-data-panel">
       <div class="panel-head report-panel-heading"><div><div class="panel-title">Allocation history</div><div class="panel-subtitle">Latest ${records.length.toLocaleString()} records · searchable and exportable</div></div><button class="button button-secondary button-small" id="export-month-csv" type="button" ${records.length ? '' : 'disabled'}>↓ Export history CSV</button></div>
       <div class="report-table-toolbar"><input class="list-search" type="search" placeholder="Search monthly allocation records by recipient, assigner, reference or subject…" data-filter-target=".allocation-history-row" aria-label="Search allocation history" /><span>Up to 1,500 records</span></div>
-      <div class="table-wrap report-table-wrap${records.length > 8 ? ' table-wrap-vertical' : ''}" role="region" aria-label="Monthly allocation history" tabindex="0"><table class="team-table report-table report-history-table"><thead><tr><th>Work date</th><th>Recipient</th><th>Assigned by</th><th>Reference</th><th>Subject</th><th>Type</th><th>Assigned at</th></tr></thead><tbody>${recordRows || '<tr><td colspan="7"><div class="report-empty-state"><strong>No allocations recorded</strong><span>There are no allocation records for this reporting month.</span></div></td></tr>'}</tbody></table></div>
+      <div class="table-wrap report-table-wrap" role="region" aria-label="Monthly allocation history" tabindex="0"><table class="team-table report-table report-history-table"><thead><tr><th>Work date</th><th>Recipient</th><th>Assigned by</th><th>Reference</th><th>Subject</th><th>Type</th><th>Assigned at</th></tr></thead><tbody>${recordRows || '<tr><td colspan="7"><div class="report-empty-state"><strong>No allocations recorded</strong><span>There are no allocation records for this reporting month.</span></div></td></tr>'}</tbody></table></div>
     </section>
   </div>`;
 }
@@ -1186,6 +1344,10 @@ function bindViewActions() {
     panel.querySelectorAll(selector).forEach((item) => { item.hidden = !item.textContent.toLocaleLowerCase().includes(input.value.trim().toLocaleLowerCase()); });
   }));
   $('#analytics-month')?.addEventListener('change', (event) => loadAdminAnalytics(event.target.value));
+  $('#analytics-granularity')?.addEventListener('change', (event) => { adminAnalyticsGranularity = event.target.value === 'weekly' ? 'weekly' : 'daily'; const panel = $('#view-reports'); if (panel) { panel.innerHTML = renderAdminAnalytics(); bindViewActions(); } });
+  $('#analytics-agent-filter')?.addEventListener('change', (event) => { adminAnalyticsAgentFilter = event.target.value; const panel = $('#view-reports'); if (panel) { panel.innerHTML = renderAdminAnalytics(); bindViewActions(); } });
+  $('#analytics-kind-filter')?.addEventListener('change', (event) => { adminAnalyticsKindFilter = event.target.value; const panel = $('#view-reports'); if (panel) { panel.innerHTML = renderAdminAnalytics(); bindViewActions(); } });
+  $('#export-analytics-xlsx')?.addEventListener('click', exportAdminAnalyticsExcel);
   $('#export-agent-csv')?.addEventListener('click', exportAgentPerformanceCsv);
   $('#export-month-csv')?.addEventListener('click', exportMonthlyAllocationCsv);
   $('#admin-add-member')?.addEventListener('click', openAdminAddMemberDialog);

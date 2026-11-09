@@ -34,6 +34,6 @@ test('HTML application shell and runtime config are never served from a stale br
 test('all frontend modules revalidate before reuse and static asset URLs are versioned', () => {
   assert.match(netlify, /for = "\/src\/\*"/);
   assert.match(netlify, /Cache-Control = "no-cache, must-revalidate"/);
-  assert.match(html, /styles\.css\?v=20261109-session-cache-v1/);
-  assert.match(html, /app\.mjs\?v=20261109-session-cache-v1/);
+  assert.match(html, /styles\.css\?v=20261109-responsive-analytics-v2/);
+  assert.match(html, /app\.mjs\?v=20261109-responsive-analytics-v2/);
 });
