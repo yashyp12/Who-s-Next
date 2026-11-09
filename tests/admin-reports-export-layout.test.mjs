@@ -55,6 +55,6 @@ test('long report tables scroll only when their row count exceeds the threshold'
 });
 
 test('report asset cache versions are refreshed', () => {
-  assert.match(html, /styles\.css\?v=20261109-admin-reports-v2/);
-  assert.match(html, /app\.mjs\?v=20261109-admin-reports-v2/);
+  assert.match(html, /styles\.css\?v=20261109-session-cache-v1/);
+  assert.match(html, /app\.mjs\?v=20261109-session-cache-v1/);
 });
