@@ -961,3 +961,72 @@ body {
   .analytics-state-icon { width:34px; height:34px; border-radius:10px; }
   .analytics-loading-bar { grid-column:1 / -1; }
 }
+
+
+/* One document-level vertical scroll; prevent accidental viewport-wide horizontal overflow. */
+html, body {
+  width:100%;
+  max-width:100%;
+  overflow-x:clip;
+}
+#app, .layout, .main, .section-view {
+  min-width:0;
+  max-width:100%;
+}
+.layout {
+  width:100%;
+  grid-template-columns:248px minmax(0,1fr);
+}
+.main {
+  width:100%;
+  min-width:0;
+}
+.bottom-grid {
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+.bottom-grid > *,
+.middle-grid > *,
+.report-grid > *,
+.analytics-grid > * {
+  min-width:0;
+}
+@media(max-width:720px) {
+  .bottom-grid { grid-template-columns:minmax(0,1fr); }
+}
+
+/* The team roster becomes an independent vertical scroll region only for larger teams. */
+.table-wrap {
+  width:100%;
+  min-width:0;
+  max-width:100%;
+  overflow-x:auto;
+  overflow-y:visible;
+  overscroll-behavior-x:contain;
+  -webkit-overflow-scrolling:touch;
+}
+.table-wrap-vertical {
+  max-height:min(560px,62vh);
+  overflow-y:auto;
+  overflow-x:auto;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+  scrollbar-width:thin;
+  scrollbar-color:#64778b #101821;
+  padding-right:4px;
+}
+.table-wrap-vertical::-webkit-scrollbar { width:9px;height:9px; }
+.table-wrap-vertical::-webkit-scrollbar-track { background:#101821;border-radius:99px; }
+.table-wrap-vertical::-webkit-scrollbar-thumb {
+  background:#64778b;
+  border:2px solid #101821;
+  border-radius:99px;
+}
+.table-wrap-vertical .team-table thead {
+  position:sticky;
+  top:0;
+  z-index:3;
+  background:#151e28;
+}
+@media(max-width:720px) {
+  .table-wrap-vertical { max-height:min(460px,56vh); }
+}
