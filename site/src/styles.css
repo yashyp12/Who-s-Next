@@ -1343,6 +1343,7 @@ html, body { min-height:100%; height:auto; overflow-x:clip; overflow-y:auto; }
 .schedule-toolbar-actions { flex-wrap:nowrap; align-items:center; justify-content:flex-end; }
 .schedule-toolbar-actions .button { white-space:nowrap; padding-inline:clamp(9px,1.1vw,15px); }
 .table-wrap-vertical { max-height:none; overflow-x:auto; overflow-y:visible; scrollbar-gutter:auto; }
+.report-table-wrap.table-wrap-vertical { max-height:none; overflow-x:auto; overflow-y:visible; scrollbar-gutter:auto; }
 .report-table-wrap.table-wrap-vertical { max-height:none; overflow-x:auto; overflow-y:visible; }
 .reports-insights { grid-template-columns:minmax(0,1.7fr) minmax(260px,.8fr); align-items:stretch; }
 .reports-insights .analytics-trend-panel { grid-column:auto; min-width:0; }
