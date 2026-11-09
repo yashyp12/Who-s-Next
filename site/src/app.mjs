@@ -185,7 +185,7 @@ function setupRealtime() {
   realtimeChannel = supabase.channel(`whos-next-${workspaceId}`, { config: { broadcast: { self: false } } })
     .on('broadcast', { event: 'refresh' }, () => {
       if (realtimeRefreshTimer) window.clearTimeout(realtimeRefreshTimer);
-      realtimeRefreshTimer = window.setTimeout(() => reloadRemote().catch((error) => toast(error.message || 'Live refresh failed.', true)), 120);
+      realtimeRefreshTimer = window.setTimeout(() => reloadRemote().catch((error) => toast(error.message || 'Live refresh failed.', true)), 280);
     })
     .subscribe();
 }
@@ -272,12 +272,14 @@ async function reloadRemote() {
     if (handoverError) throw handoverError;
     const { data, error } = await supabase.rpc('get_dashboard');
     if (error) throw error;
+    const previousSnapshot = state ? JSON.stringify(state) : null;
     state = mapDashboard(data || {});
     const { data: presence, error: presenceError } = await supabase.rpc('get_workspace_presence');
     if (presenceError) throw presenceError;
     state.presence = Array.isArray(presence) ? presence : [];
     await maybeAutoCheckIn();
-    renderApp();
+    // Skip replacing the full app DOM for duplicate/no-op realtime broadcasts.
+    if (JSON.stringify(state) !== previousSnapshot) renderApp();
   } finally {
     refreshInProgress = false;
     if (refreshQueued) {

@@ -244,7 +244,10 @@ function subscribe(client, memberId) {
       });
     })
     .subscribe((status) => {
-      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+      if (status === 'SUBSCRIBED') {
+        // Reconcile immediately after initial connect or reconnect; polling remains the fallback.
+        loadNotifications({ notify: initialLoadComplete }).catch((error) => console.error('Notification reconnect sync failed:', error));
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
         console.warn('Notification realtime is unavailable; polling fallback remains active.');
       }
     });

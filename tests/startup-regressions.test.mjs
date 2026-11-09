@@ -265,3 +265,33 @@ test('search filter handlers bind all filter inputs as a collection', async () =
   assert.match(app, /\$\$\('\[data-filter-target\]'\)\.forEach/);
   assert.doesNotMatch(app, /(?<!\$)\$\('\[data-filter-target\]'\)\.forEach/);
 });
+
+
+test('allocation notification migration creates a recipient notification for each inserted allocation', async () => {
+  const migration = await readFile(new URL('../supabase/migrations/202611090016_allocation_notifications.sql', import.meta.url), 'utf8');
+  assert.match(migration, /after insert on public\.allocations/i);
+  assert.match(migration, /new\.recipient_member_id/);
+  assert.match(migration, /insert into public\.notifications/i);
+  assert.match(migration, /supabase_realtime/);
+  assert.match(migration, /mark_my_notification_read/);
+});
+
+test('realtime workspace refresh skips full DOM rerenders when state is unchanged', async () => {
+  const source = await readFile(new URL('../site/src/app.mjs', import.meta.url), 'utf8');
+  assert.match(source, /const previousSnapshot = state \? JSON\.stringify\(state\) : null/);
+  assert.match(source, /if \(JSON\.stringify\(state\) !== previousSnapshot\) renderApp\(\)/);
+});
+
+test('notification realtime reconnect immediately reconciles unread notifications while polling remains active', async () => {
+  const source = await readFile(new URL('../site/src/notifications.mjs', import.meta.url), 'utf8');
+  assert.match(source, /status === 'SUBSCRIBED'/);
+  assert.match(source, /loadNotifications\(\{ notify: initialLoadComplete \}\)/);
+  assert.match(source, /setInterval\(\(\) => \{[\s\S]*?loadNotifications\(\{ notify: true \}\)/);
+});
+
+test('operational lists use page scrolling while allocation and notification panels retain contained scroll', async () => {
+  const source = await readFile(new URL('../site/src/styles.css', import.meta.url), 'utf8');
+  assert.match(source, /\.schedule-list,[\s\S]*?max-height: none/);
+  assert.match(source, /\.allocation-log,[\s\S]*?overscroll-behavior: contain/);
+  assert.match(source, /scrollbar-gutter: stable/);
+});
