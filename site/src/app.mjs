@@ -1034,6 +1034,21 @@ async function loadAdminAnalytics(month) {
   }
 }
 
+function analyticsDaysForView(days = []) {
+  if (adminAnalyticsGranularity !== 'weekly') return days;
+  const groups = new Map();
+  for (const item of days) {
+    const date = new Date(String(item.date || (adminAnalyticsMonth + '-01')) + 'T12:00:00Z');
+    const monday = new Date(date);
+    monday.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+    const key = monday.toISOString().slice(0, 10);
+    const label = 'Week of ' + key.slice(8, 10) + ' ' + new Intl.DateTimeFormat('en', { month: 'short', timeZone: 'UTC' }).format(monday);
+    const group = groups.get(key) || { date: key, day: label, count: 0 };
+    group.count += Number(item.count) || 0;
+    groups.set(key, group);
+  }
+  return [...groups.values()];
+}
 function renderMiniLineChart(days = []) {
   const values = days.map((item) => Number(item.count) || 0);
   const max = Math.max(1, ...values);
@@ -1189,6 +1204,10 @@ function bindViewActions() {
     panel.querySelectorAll(selector).forEach((item) => { item.hidden = !item.textContent.toLocaleLowerCase().includes(input.value.trim().toLocaleLowerCase()); });
   }));
   $('#analytics-month')?.addEventListener('change', (event) => loadAdminAnalytics(event.target.value));
+  $('#analytics-granularity')?.addEventListener('change', (event) => { adminAnalyticsGranularity = event.target.value === 'weekly' ? 'weekly' : 'daily'; const panel = $('#view-reports'); if (panel) { panel.innerHTML = renderAdminAnalytics(); bindViewActions(); } });
+  $('#analytics-agent-filter')?.addEventListener('change', (event) => { adminAnalyticsAgentFilter = event.target.value; const panel = $('#view-reports'); if (panel) { panel.innerHTML = renderAdminAnalytics(); bindViewActions(); } });
+  $('#analytics-kind-filter')?.addEventListener('change', (event) => { adminAnalyticsKindFilter = event.target.value; const panel = $('#view-reports'); if (panel) { panel.innerHTML = renderAdminAnalytics(); bindViewActions(); } });
+  $('#export-analytics-xlsx')?.addEventListener('click', exportAdminAnalyticsExcel);
   $('#export-agent-csv')?.addEventListener('click', exportAgentPerformanceCsv);
   $('#export-month-csv')?.addEventListener('click', exportMonthlyAllocationCsv);
   $('#admin-add-member')?.addEventListener('click', openAdminAddMemberDialog);
