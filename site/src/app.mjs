@@ -297,7 +297,7 @@ function showJoinScreen(message = '') {
       <p>Enter the individual access code shared with you. Your code identifies your team profile—no username, email or password required.</p>
       ${message ? `<div class="notice">${escapeHtml(message)}</div>` : ''}
       <form id="join-form">
-        <div class="field"><label for="join-code">Your individual access code</label><input id="join-code" name="code" type="password" autocomplete="one-time-code" required minlength="8" maxlength="200" pattern="[A-Za-z0-9._-]{8,200}" placeholder="e.g. yashyp12" /></div>
+        <div class="field"><label for="join-code">Your individual access code</label><input id="join-code" name="code" type="password" autocomplete="one-time-code" required minlength="8" maxlength="200" pattern="[A-Za-z0-9._-]{8,200}" placeholder="Enter your access code given by admin" /></div>
         <button class="button button-primary" type="submit">Open workspace <span>→</span></button>
       </form>
       <div class="join-help">Your code maps to one team member. Keep it private and contact the workspace owner if it is lost or exposed.</div>
