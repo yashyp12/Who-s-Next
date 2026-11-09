@@ -20,6 +20,9 @@ let adminRoster = [];
 let adminRosterLoaded = false;
 let adminAnalytics = null;
 let adminAnalyticsMonth = '';
+let adminAnalyticsLoading = false;
+let adminAnalyticsError = '';
+let adminAnalyticsRequestId = 0;
 let workspaceId = null;
 let realtimeChannel = null;
 let presenceTimer = null;
@@ -967,29 +970,51 @@ function monthRange(value) {
 }
 
 async function loadAdminAnalytics(month) {
-  if (!currentIsAdmin || !remoteMode || !/^\\d{4}-\\d{2}$/.test(month)) return;
+  if (!currentIsAdmin || !remoteMode || !/^\d{4}-\d{2}$/.test(month)) return;
+
+  const requestId = ++adminAnalyticsRequestId;
   adminAnalyticsMonth = month;
   adminAnalytics = null;
+  adminAnalyticsError = '';
+  adminAnalyticsLoading = true;
   const range = monthRange(month);
   const panel = $('#view-reports');
   if (panel) panel.innerHTML = renderAdminAnalytics();
+
+  let timeoutId;
   try {
-    const { data, error } = await supabase.rpc('admin_get_monthly_analytics', {
-      p_start_date: range.start,
-      p_end_date: range.end,
-    });
-    if (error) throw error;
-    adminAnalytics = data || null;
+    const result = await Promise.race([
+      supabase.rpc('admin_get_monthly_analytics', {
+        p_start_date: range.start,
+        p_end_date: range.end,
+      }),
+      new Promise((_, reject) => {
+        timeoutId = window.setTimeout(
+          () => reject(new Error('The analytics service did not respond within 15 seconds. Check your connection and retry.')),
+          15000,
+        );
+      }),
+    ]);
+    if (requestId !== adminAnalyticsRequestId) return;
+    if (result.error) throw result.error;
+    adminAnalytics = result.data ?? {};
+    adminAnalyticsLoading = false;
+    adminAnalyticsError = '';
     if (activeView === 'reports') {
       const current = $('#view-reports');
       if (current) current.innerHTML = renderAdminAnalytics();
       bindViewActions();
     }
   } catch (error) {
+    if (requestId !== adminAnalyticsRequestId) return;
     adminAnalytics = null;
+    adminAnalyticsLoading = false;
+    adminAnalyticsError = error.message || 'Unknown error';
     const current = $('#view-reports');
-    if (current) current.innerHTML = `<section class="panel"><div class="empty-state">Monthly analytics could not be loaded: ${escapeHtml(error.message || 'Unknown error')}. Apply the analytics database migration and try again.</div><button class="button button-secondary" id="analytics-retry">Retry</button></section>`;
+    if (current) current.innerHTML = renderAdminAnalytics();
     $('#analytics-retry')?.addEventListener('click', () => loadAdminAnalytics(month));
+  } finally {
+    if (timeoutId) window.clearTimeout(timeoutId);
   }
 }
 
@@ -1007,7 +1032,9 @@ function renderMiniLineChart(days = []) {
 function renderAdminAnalytics() {
   const data = adminAnalytics;
   const month = adminAnalyticsMonth || localDate().slice(0,7);
-  if (!data) return `<section class="panel"><div class="empty-state">Loading monthly workspace analytics…</div></section>`;
+  if (adminAnalyticsLoading) return `<section class="panel analytics-state-card" role="status" aria-live="polite"><span class="analytics-state-icon" aria-hidden="true">↗</span><div><strong>Preparing your monthly report</strong><p>We’re securely retrieving allocation totals and team activity for ${escapeHtml(month)}.</p></div><div class="analytics-loading-bar" aria-hidden="true"><span></span></div></section>`;
+  if (adminAnalyticsError) return `<section class="panel analytics-state-card analytics-error-state" role="alert"><span class="analytics-state-icon" aria-hidden="true">!</span><div><strong>We couldn’t load this report</strong><p>${escapeHtml(adminAnalyticsError)}</p><small>Check your connection and confirm the monthly analytics database function is available.</small><div class="analytics-state-actions"><button class="button button-primary" id="analytics-retry" type="button">Try again</button></div></div></section>`;
+  if (!data) return `<section class="panel analytics-state-card"><strong>Monthly report is not available yet</strong><p>Choose a reporting month or retry the request.</p><button class="button button-secondary" id="analytics-retry" type="button">Retry report</button></section>`;
   const kinds = data.kinds || [];
   const total = Number(data.total || 0);
   const newEmails = Number(data.newEmails || 0);
