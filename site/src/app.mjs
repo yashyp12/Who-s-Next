@@ -1136,6 +1136,9 @@ async function exportAdminAnalyticsExcel() {
     dashboard.getRow(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF263746' } };
     dashboard.getColumn(1).width = 28;
     dashboard.getColumn(2).width = 22;
+    for (let col = 3; col <= 12; col += 1) dashboard.getColumn(col).width = 14;
+    dashboard.getCell('A9').value = 'Allocation history detail rows (latest 1,500 maximum): ' + (data.records || []).length;
+    dashboard.getCell('A9').font = { italic: true, color: { argb: 'FF64748B' } };
     for (let row = 5; row <= 8; row += 1) dashboard.getCell(row, 2).font = { bold: true, size: 14, color: { argb: 'FF263746' } };
 
     const agents = workbook.addWorksheet('Agent performance');
@@ -1222,8 +1225,8 @@ async function exportAdminAnalyticsExcel() {
     };
     const trendId = workbook.addImage({ base64: makeChartPng('trend'), extension: 'png' });
     const mixId = workbook.addImage({ base64: makeChartPng('mix'), extension: 'png' });
-    dashboard.addImage(trendId, { tl: { col: 0, row: 10 }, ext: { width: 590, height: 275 } });
-    dashboard.addImage(mixId, { tl: { col: 4, row: 10 }, ext: { width: 590, height: 275 } });
+    dashboard.addImage(trendId, { tl: { col: 0, row: 10 }, ext: { width: 560, height: 275 } });
+    dashboard.addImage(mixId, { tl: { col: 8, row: 10 }, ext: { width: 560, height: 275 } });
 
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
