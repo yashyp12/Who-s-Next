@@ -1123,7 +1123,7 @@ function renderAdminAnalytics() {
     </section>
     <section class="panel report-data-panel">
       <div class="panel-head report-panel-heading"><div><div class="panel-title">Allocation history</div><div class="panel-subtitle">Latest ${records.length.toLocaleString()} records · searchable and exportable</div></div><button class="button button-secondary button-small" id="export-month-csv" type="button" ${records.length ? '' : 'disabled'}>↓ Export history CSV</button></div>
-      <div class="report-table-toolbar"><input class="list-search" type="search" placeholder="Search recipient, assigner, reference or subject…" data-filter-target=".allocation-history-row" aria-label="Search allocation history" /><span>Up to 1,500 records</span></div>
+      <div class="report-table-toolbar"><input class="list-search" type="search" placeholder="Search monthly allocation records by recipient, assigner, reference or subject…" data-filter-target=".allocation-history-row" aria-label="Search allocation history" /><span>Up to 1,500 records</span></div>
       <div class="table-wrap report-table-wrap${records.length > 8 ? ' table-wrap-vertical' : ''}" role="region" aria-label="Monthly allocation history" tabindex="0"><table class="team-table report-table report-history-table"><thead><tr><th>Work date</th><th>Recipient</th><th>Assigned by</th><th>Reference</th><th>Subject</th><th>Type</th><th>Assigned at</th></tr></thead><tbody>${recordRows || '<tr><td colspan="7"><div class="report-empty-state"><strong>No allocations recorded</strong><span>There are no allocation records for this reporting month.</span></div></td></tr>'}</tbody></table></div>
     </section>
   </div>`;
