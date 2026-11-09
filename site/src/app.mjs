@@ -166,8 +166,21 @@ function mapDashboard(payload) {
 
 async function connectRemote() {
   const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+  // Supabase's default is persistent localStorage. Use tab-scoped sessionStorage
+  // so closing the browser tab ends this anonymous workspace login while refreshes
+  // within the same tab retain the session.
+  try {
+    const projectRef = new URL(CONFIG.supabaseUrl).hostname.split('.')[0];
+    if (projectRef) localStorage.removeItem(`sb-${projectRef}-auth-token`);
+  } catch { /* Invalid configuration is reported by createClient below. */ }
+
   supabase = createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey, {
-    auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: false },
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: false,
+      storage: window.sessionStorage,
+    },
   });
   const { data: { session }, error: sessionError } = await supabase.auth.getSession();
   if (sessionError) throw sessionError;
