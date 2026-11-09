@@ -295,3 +295,43 @@ test('operational lists use page scrolling while allocation and notification pan
   assert.match(source, /\.allocation-log,[\s\S]*?overscroll-behavior: contain/);
   assert.match(source, /scrollbar-gutter: stable/);
 });
+
+
+test('first-time walkthrough starts after a member joins or restores a signed-in workspace', async () => {
+  const app = await readFile(new URL('../site/src/app.mjs', import.meta.url), 'utf8');
+  assert.match(app, /introTourAutoStartPending = !hasCompletedIntroTour\(\)/);
+  assert.match(app, /startIntroTour\(\{ manual: false \}\)/);
+  assert.match(app, /hasCompletedIntroTour\(\)/);
+});
+
+test('guided tour covers core workspace sections and conditionally includes admin controls', async () => {
+  const app = await readFile(new URL('../site/src/app.mjs', import.meta.url), 'utf8');
+  assert.match(app, /Allocate emails fairly/);
+  assert.match(app, /See the team at a glance/);
+  assert.match(app, /Manage your shift and profile/);
+  assert.match(app, /Handle requests/);
+  assert.match(app, /Review activity and reports/);
+  assert.match(app, /Stay on top of notifications/);
+  assert.match(app, /if \(currentIsAdmin\) steps\.push/);
+});
+
+test('guided tour supports next, back, skip, finish, replay and persists completion per member', async () => {
+  const app = await readFile(new URL('../site/src/app.mjs', import.meta.url), 'utf8');
+  assert.match(app, /id="intro-tour-next"/);
+  assert.match(app, /id="intro-tour-back"/);
+  assert.match(app, /id="intro-tour-skip"/);
+  assert.match(app, /localStorage\.setItem\(introTourStorageKey\(\), 'completed'\)/);
+  assert.match(app, /id="tour-replay"/);
+  assert.match(app, /function finishIntroTour\(\)/);
+});
+
+test('guided tour has accessible dialog semantics and responsive presentation', async () => {
+  const app = await readFile(new URL('../site/src/app.mjs', import.meta.url), 'utf8');
+  const html = await readFile(new URL('../site/index.html', import.meta.url), 'utf8');
+  const styles = await readFile(new URL('../site/src/styles.css', import.meta.url), 'utf8');
+  assert.match(app, /role="dialog" aria-modal="true"/);
+  assert.match(app, /aria-labelledby="intro-tour-title"/);
+  assert.match(html, /id="tour-root"/);
+  assert.match(styles, /\.intro-tour-card/);
+  assert.match(styles, /@media\(max-width:600px\)/);
+});
