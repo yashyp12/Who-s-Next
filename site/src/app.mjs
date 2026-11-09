@@ -1029,28 +1029,104 @@ function renderMiniLineChart(days = []) {
   return `<svg class="analytics-line-chart" viewBox="0 0 700 180" role="img" aria-label="Daily allocation trend"><path d="M20 150H680" stroke="currentColor" opacity=".2"/><polyline points="${points}" fill="none" stroke="var(--accent)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>${values.map((v,i)=>{const x=values.length<=1?20:20+i*660/(values.length-1);const y=150-v/max*118;return `<circle cx="${x}" cy="${y}" r="4" fill="var(--accent)"><title>${escapeHtml(days[i].day)}: ${v}</title></circle>`;}).join('')}</svg><div class="chart-axis"><span>${escapeHtml(days[0]?.day || '')}</span><span>${escapeHtml(days[Math.floor(days.length/2)]?.day || '')}</span><span>${escapeHtml(days.at(-1)?.day || '')}</span></div>`;
 }
 
+function csvCell(value) {
+  let text = value == null ? '' : String(value);
+  // Prevent spreadsheet formula execution when CSV files are opened.
+  if (/^[\t\r\n ]*[=+\-@]/.test(text)) text = "'" + text;
+  return '"' + text.replace(/"/g, '""') + '"';
+}
+
+function downloadReportCsv(filename, headers, rows) {
+  const csv = [headers, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n');
+  const blob = new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportAgentPerformanceCsv() {
+  if (!adminAnalytics) return toast('Load a monthly report before exporting.', true);
+  const members = [...(adminAnalytics.members || [])].sort((a, b) => Number(b.count) - Number(a.count) || String(a.name).localeCompare(String(b.name)));
+  const total = Number(adminAnalytics.total || 0);
+  const rows = members.map((member, index) => [
+    index + 1, member.name, Number(member.count) || 0,
+    Number(member.newEmails) || 0, Number(member.existingTickets) || 0,
+    total ? ((Number(member.count) || 0) / total * 100).toFixed(1) + '%' : '0%',
+  ]);
+  downloadReportCsv(`whos-next-agent-performance-${adminAnalyticsMonth}.csv`,
+    ['Rank', 'Agent', 'Total allocations', 'New emails', 'Existing tickets', 'Share of monthly allocations'], rows);
+}
+
+function exportMonthlyAllocationCsv() {
+  if (!adminAnalytics) return toast('Load a monthly report before exporting.', true);
+  const records = adminAnalytics.records || [];
+  const rows = records.map((item) => [
+    item.day, item.assignedAt, item.recipient, item.assigner,
+    item.reference || '', item.subject || '', item.kind,
+  ]);
+  downloadReportCsv(`whos-next-allocation-history-${adminAnalyticsMonth}.csv`,
+    ['Work date', 'Assigned at', 'Recipient', 'Assigned by', 'Reference', 'Subject', 'Allocation type'], rows);
+  if (records.length >= 1500) toast('CSV exported. This report currently includes the latest 1,500 allocation records.');
+}
+
 function renderAdminAnalytics() {
   const data = adminAnalytics;
   const month = adminAnalyticsMonth || localDate().slice(0,7);
-  if (adminAnalyticsLoading) return `<section class="panel analytics-state-card" role="status" aria-live="polite"><span class="analytics-state-icon" aria-hidden="true">↗</span><div><strong>Preparing your monthly report</strong><p>We’re securely retrieving allocation totals and team activity for ${escapeHtml(month)}.</p></div><div class="analytics-loading-bar" aria-hidden="true"><span></span></div></section>`;
+  if (adminAnalyticsLoading) return `<section class="panel analytics-state-card" role="status" aria-live="polite"><span class="analytics-state-icon" aria-hidden="true">↗</span><div><strong>Preparing your monthly report</strong><p>We’re retrieving allocation totals and team activity for ${escapeHtml(month)}.</p></div><div class="analytics-loading-bar" aria-hidden="true"><span></span></div></section>`;
   if (adminAnalyticsError) return `<section class="panel analytics-state-card analytics-error-state" role="alert"><span class="analytics-state-icon" aria-hidden="true">!</span><div><strong>We couldn’t load this report</strong><p>${escapeHtml(adminAnalyticsError)}</p><small>Check your connection and confirm the monthly analytics database function is available.</small><div class="analytics-state-actions"><button class="button button-primary" id="analytics-retry" type="button">Try again</button></div></div></section>`;
   if (!data) return `<section class="panel analytics-state-card"><strong>Monthly report is not available yet</strong><p>Choose a reporting month or retry the request.</p><button class="button button-secondary" id="analytics-retry" type="button">Retry report</button></section>`;
+
   const kinds = data.kinds || [];
   const total = Number(data.total || 0);
   const newEmails = Number(data.newEmails || 0);
   const tickets = Number(data.existingTickets || 0);
-  const members = data.members || [];
+  const members = [...(data.members || [])].sort((a, b) => Number(b.count) - Number(a.count) || String(a.name).localeCompare(String(b.name)));
+  const records = data.records || [];
   const colors = ['#d1f36a','#70c7ee','#d59af5','#f0bd65','#73d6a0','#ff8585'];
-  let offset = 0;
-  const segments = kinds.map((item,index)=>{const amount=Number(item.count)||0;const from=offset;offset+=total?amount/total*100:0;return `${colors[index%colors.length]} ${from.toFixed(2)}% ${offset.toFixed(2)}%`;});
-  const donut = segments.length ? `conic-gradient(${segments.join(',')})` : 'conic-gradient(#33404d 0 100%)';
-  return `<div class="page-toolbar"><div><div class="panel-title">Operations analytics</div><div class="panel-subtitle">Monthly ticket volume and agent-wise productivity · based on recorded allocations</div></div><div class="toolbar-actions"><label class="month-picker-label" for="analytics-month">Reporting month</label><input id="analytics-month" type="month" value="${escapeAttr(month)}" /></div></div>
-    <div class="notice analytics-definition">These charts show allocation records captured in WHO’S next. They measure work distributed to agents, not ticket closures or SLA completion; those outcomes are not currently recorded by this app.</div>
-    <div class="report-grid analytics-kpis"><div class="report-card"><small>Total assignments</small><strong>${total.toLocaleString()}</strong><span>Selected month</span></div><div class="report-card"><small>New emails</small><strong>${newEmails.toLocaleString()}</strong><span>New email allocations</span></div><div class="report-card"><small>Existing tickets</small><strong>${tickets.toLocaleString()}</strong><span>Routed existing tickets</span></div><div class="report-card"><small>Active agents</small><strong>${Number(data.activeAgents||0)}</strong><span>With at least one assignment</span></div></div>
-    <div class="analytics-grid"><section class="panel analytics-wide"><div class="panel-head"><div><div class="panel-title">Daily workload trend</div><div class="panel-subtitle">Assignments recorded each day of the selected month</div></div></div>${renderMiniLineChart(data.days || [])}</section>
-    <section class="panel"><div class="panel-head"><div><div class="panel-title">Work type split</div><div class="panel-subtitle">New email versus existing ticket</div></div></div><div class="donut-layout"><div class="analytics-donut" style="background:${donut}"><div><strong>${total}</strong><small>Total</small></div></div><div class="chart-legend">${kinds.map((item,index)=>`<div><i style="background:${colors[index%colors.length]}"></i><span>${escapeHtml(item.label)}</span><strong>${Number(item.count)}</strong></div>`).join('') || '<small>No allocation data</small>'}</div></div></section>
-    <section class="panel analytics-wide"><div class="panel-head"><div><div class="panel-title">Agent-wise productivity</div><div class="panel-subtitle">Assignments received by each agent · sorted highest first</div></div></div><input class="list-search" type="search" placeholder="Search agents…" data-filter-target=".analytics-agent-row" aria-label="Search agents" /><div class="analytics-agent-list" data-filter-list>${members.map((item)=>`<div class="analytics-agent-row"><div><strong>${escapeHtml(item.name)}</strong><small>${Number(item.newEmails)} new emails · ${Number(item.existingTickets)} existing tickets</small></div><strong>${Number(item.count)}<small> assignments</small></strong><div class="analytics-bar"><i style="width:${total?Math.min(100,Number(item.count)/Math.max(1,Number(members[0]?.count))*100):0}%"></i></div></div>`).join('') || '<div class="empty-state">No assignments for this month.</div>'}</div></section></div>
-    <section class="panel" style="margin-top:15px"><div class="panel-head"><div><div class="panel-title">Allocation records</div><div class="panel-subtitle">Search by agent, assigner, ticket reference or subject</div></div></div><input class="list-search" type="search" placeholder="Search monthly allocation records…" data-filter-target=".analytics-record-row" aria-label="Search allocation records" /><div class="analytics-record-list" data-filter-list>${(data.records||[]).map(item=>`<div class="analytics-record-row"><span>${escapeHtml(item.day)}</span><strong>${escapeHtml(item.recipient)}</strong><span>${escapeHtml(item.assigner)}</span><span>${escapeHtml(item.reference||item.subject||'—')}</span><span>${escapeHtml(item.kind)}</span></div>`).join('') || '<div class="empty-state">No records in this month.</div>'}</div></section>`;
+  const emailShare = total ? Math.round(newEmails / total * 100) : 0;
+  const ticketShare = total ? 100 - emailShare : 0;
+  const agentRows = members.map((item, index) => {
+    const count = Number(item.count) || 0;
+    const share = total ? count / total * 100 : 0;
+    return `<tr class="agent-performance-row"><td><span class="report-rank">${index + 1}</span></td><td><strong>${escapeHtml(item.name)}</strong></td><td>${Number(item.newEmails) || 0}</td><td>${Number(item.existingTickets) || 0}</td><td><strong>${count}</strong></td><td><div class="report-share"><span><i style="width:${Math.min(100, share)}%"></i></span><small>${share.toFixed(1)}%</small></div></td></tr>`;
+  }).join('');
+  const recordRows = records.map((item) => `<tr class="allocation-history-row"><td>${escapeHtml(item.day)}</td><td><strong>${escapeHtml(item.recipient)}</strong></td><td>${escapeHtml(item.assigner)}</td><td>${escapeHtml(item.reference || '—')}</td><td>${escapeHtml(item.subject || '—')}</td><td><span class="report-type-pill ${item.kind === 'Existing ticket' ? 'ticket' : 'email'}">${escapeHtml(item.kind)}</span></td><td>${escapeHtml(prettyDateTime(item.assignedAt))}</td></tr>`).join('');
+
+  return `<div class="reports-shell">
+    <section class="reports-heading">
+      <div class="reports-heading-copy"><div class="eyebrow">Admin workspace · Reports</div><h2>Operations overview</h2><p>Monthly allocation performance across your team. Use the exports to review agent workload and allocation history.</p></div>
+      <div class="report-period-control"><label for="analytics-month">REPORTING MONTH</label><div class="report-month-input"><input id="analytics-month" type="month" value="${escapeAttr(month)}" aria-label="Select reporting month" /></div></div>
+    </section>
+    <div class="notice analytics-definition"><strong>Reporting basis</strong><span>These metrics measure work allocated in WHO’S next. They do not represent ticket resolution, quality scores or SLA completion.</span></div>
+    <section class="report-grid analytics-kpis" aria-label="Monthly summary">
+      <article class="report-card"><small>Total allocations</small><strong>${total.toLocaleString()}</strong><span>Recorded this month</span></article>
+      <article class="report-card"><small>New emails</small><strong>${newEmails.toLocaleString()}</strong><span>${emailShare}% of workload</span></article>
+      <article class="report-card"><small>Existing tickets</small><strong>${tickets.toLocaleString()}</strong><span>${ticketShare}% of workload</span></article>
+      <article class="report-card"><small>Agents with allocations</small><strong>${Number(data.activeAgents || 0)}</strong><span>At least one allocation</span></article>
+    </section>
+    <div class="analytics-grid reports-insights">
+      <section class="panel analytics-wide"><div class="panel-head"><div><div class="panel-title">Daily allocation trend</div><div class="panel-subtitle">Workload recorded across the selected month</div></div></div>${renderMiniLineChart(data.days || [])}</section>
+      <section class="panel report-mix-panel"><div class="panel-head"><div><div class="panel-title">Allocation mix</div><div class="panel-subtitle">Distribution by work type</div></div></div>
+        <div class="report-mix-bar" role="img" aria-label="${emailShare}% new emails and ${ticketShare}% existing tickets"><span style="width:${emailShare}%"></span><i style="width:${ticketShare}%"></i></div>
+        <div class="report-mix-legend"><div><i class="mix-email"></i><span>New emails</span><strong>${newEmails}</strong></div><div><i class="mix-ticket"></i><span>Existing tickets</span><strong>${tickets}</strong></div></div>
+      </section>
+    </div>
+    <section class="panel report-data-panel">
+      <div class="panel-head report-panel-heading"><div><div class="panel-title">Agent performance</div><div class="panel-subtitle">Ranked by allocation volume · highest workload first</div></div><button class="button button-secondary button-small" id="export-agent-csv" type="button" ${members.length ? '' : 'disabled'}>↓ Export agent CSV</button></div>
+      <div class="report-table-toolbar"><input class="list-search" type="search" placeholder="Search agents…" data-filter-target=".agent-performance-row" aria-label="Search agent performance" /><span>${members.length} team members</span></div>
+      <div class="table-wrap report-table-wrap${members.length > 8 ? ' table-wrap-vertical' : ''}" role="region" aria-label="Agent performance table" tabindex="0"><table class="team-table report-table"><thead><tr><th>Rank</th><th>Agent</th><th>New emails</th><th>Existing tickets</th><th>Total</th><th>Workload share</th></tr></thead><tbody>${agentRows || '<tr><td colspan="6"><div class="report-empty-state"><strong>No agent data for this month</strong><span>Try another reporting month.</span></div></td></tr>'}</tbody></table></div>
+    </section>
+    <section class="panel report-data-panel">
+      <div class="panel-head report-panel-heading"><div><div class="panel-title">Allocation history</div><div class="panel-subtitle">Latest ${records.length.toLocaleString()} records · searchable and exportable</div></div><button class="button button-secondary button-small" id="export-month-csv" type="button" ${records.length ? '' : 'disabled'}>↓ Export history CSV</button></div>
+      <div class="report-table-toolbar"><input class="list-search" type="search" placeholder="Search monthly allocation records by recipient, assigner, reference or subject…" data-filter-target=".allocation-history-row" aria-label="Search allocation history" /><span>Up to 1,500 records</span></div>
+      <div class="table-wrap report-table-wrap${records.length > 8 ? ' table-wrap-vertical' : ''}" role="region" aria-label="Monthly allocation history" tabindex="0"><table class="team-table report-table report-history-table"><thead><tr><th>Work date</th><th>Recipient</th><th>Assigned by</th><th>Reference</th><th>Subject</th><th>Type</th><th>Assigned at</th></tr></thead><tbody>${recordRows || '<tr><td colspan="7"><div class="report-empty-state"><strong>No allocations recorded</strong><span>There are no allocation records for this reporting month.</span></div></td></tr>'}</tbody></table></div>
+    </section>
+  </div>`;
 }
 
 function renderReports() {
@@ -1097,6 +1173,8 @@ function bindViewActions() {
     panel.querySelectorAll(selector).forEach((item) => { item.hidden = !item.textContent.toLocaleLowerCase().includes(input.value.trim().toLocaleLowerCase()); });
   }));
   $('#analytics-month')?.addEventListener('change', (event) => loadAdminAnalytics(event.target.value));
+  $('#export-agent-csv')?.addEventListener('click', exportAgentPerformanceCsv);
+  $('#export-month-csv')?.addEventListener('click', exportMonthlyAllocationCsv);
   $('#admin-add-member')?.addEventListener('click', openAdminAddMemberDialog);
   $('#admin-run-report')?.addEventListener('click', runAdminShiftReport);
   document.querySelectorAll('[data-admin-set-code]').forEach((button) => button.addEventListener('click', () => setMemberAccessCode(button.dataset.adminSetCode)));
