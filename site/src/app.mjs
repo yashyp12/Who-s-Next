@@ -1221,7 +1221,7 @@ async function exportAdminAnalyticsExcel() {
         ctx.fillText(days[0]?.day || '', left, bottom + 35);
         ctx.textAlign = 'right'; ctx.fillText(days.at(-1)?.day || '', right, bottom + 35);
       }
-      return canvas.toDataURL('image/png').split(',')[1];
+      return canvas.toDataURL('image/png');
     };
     const trendId = workbook.addImage({ base64: makeChartPng('trend'), extension: 'png' });
     const mixId = workbook.addImage({ base64: makeChartPng('mix'), extension: 'png' });
