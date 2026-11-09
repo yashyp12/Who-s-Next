@@ -47,14 +47,13 @@ test('workspace clock and actions occupy separate predictable header tracks', ()
   assert.match(css, /\.top-actions\s*\{[^}]*grid-row:2/s);
 });
 
-test('long report tables scroll only when their row count exceeds the threshold', () => {
-  assert.match(app, /members\.length > 8 \? ' table-wrap-vertical'/);
-  assert.match(app, /records\.length > 8 \? ' table-wrap-vertical'/);
-  assert.match(css, /\.report-table-wrap\.table-wrap-vertical\s*\{[^}]*overflow:auto/s);
+test('long report tables remain in the document flow without nested vertical scroll', () => {
+  assert.doesNotMatch(app, /table-wrap-vertical/);
+  assert.match(css, /\.report-table-wrap\s*\{[^}]*overflow-x:auto/s);
   assert.match(css, /\.report-table th\s*\{[^}]*position:sticky/s);
 });
 
 test('report asset cache versions are refreshed', () => {
-  assert.match(html, /styles\.css\?v=20261109-session-cache-v1/);
-  assert.match(html, /app\.mjs\?v=20261109-session-cache-v1/);
+  assert.match(html, /styles\.css\?v=20261109-responsive-analytics-v2/);
+  assert.match(html, /app\.mjs\?v=20261109-responsive-analytics-v2/);
 });
