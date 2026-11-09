@@ -668,3 +668,56 @@
   .toolbar-actions { flex-wrap:wrap; }
   #analytics-month { width:100%; }
 }
+
+
+/* Keep one predictable page scroll; only dense data panels scroll internally. */
+html {
+  min-height: 100%;
+  scrollbar-gutter: stable;
+  scroll-behavior: auto;
+}
+body {
+  min-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior-y: auto;
+}
+.layout { min-height: 100vh; align-items: start; }
+.main { min-height: 100vh; }
+.schedule-list,
+.request-list,
+.queue-list,
+.activity-list,
+.analytics-agent-list {
+  max-height: none;
+  overflow: visible;
+  overscroll-behavior: auto;
+  scrollbar-width: auto;
+  padding-right: 0;
+}
+.allocation-log,
+.analytics-record-list,
+.notification-items {
+  scrollbar-width: auto;
+  scrollbar-color: #64778b #101821;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.allocation-log::-webkit-scrollbar,
+.analytics-record-list::-webkit-scrollbar,
+.notification-items::-webkit-scrollbar { width: 10px; }
+.allocation-log::-webkit-scrollbar-thumb,
+.analytics-record-list::-webkit-scrollbar-thumb,
+.notification-items::-webkit-scrollbar-thumb {
+  background: #64778b;
+  border: 2px solid #101821;
+  border-radius: 99px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
