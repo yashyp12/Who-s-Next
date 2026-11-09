@@ -38,6 +38,11 @@ let hourlyReconcileTimer = null;
 const sidebarCollapsed = false;
 let profileMenuOpen = false;
 let autoCheckInInProgress = false;
+let introTourAutoStartPending = false;
+let introTourActive = false;
+let introTourStepIndex = 0;
+let introTourSteps = [];
+let introTourPreviousFocus = null;
 
 const partsInTimezone = (date, timeZone) => { const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(date); return Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value])); };
 const partsInWorkspace = (date = new Date()) => partsInTimezone(date, state?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);
@@ -171,7 +176,8 @@ async function connectRemote() {
   const { data: me, error } = await supabase.rpc('get_my_member');
   if (error) throw error;
   if (me?.member_id) {
-    currentMemberId = me.member_id; currentIsAdmin = Boolean(me.is_admin); workspaceId = me.workspace_id; setupRealtime();
+    currentMemberId = me.member_id; currentIsAdmin = Boolean(me.is_admin); workspaceId = me.workspace_id;
+    introTourAutoStartPending = !hasCompletedIntroTour(); setupRealtime();
     await heartbeatPresence('active');
     startPresenceTracking();
     await reloadRemote();
@@ -315,6 +321,7 @@ async function joinWorkspace(event) {
     const { data, error } = await supabase.rpc('join_workspace', { p_access_code: code });
     if (error) throw error;
     currentMemberId = data.member_id; workspaceId = data.workspace_id;
+    introTourAutoStartPending = !hasCompletedIntroTour();
     const { data: me, error: memberError } = await supabase.rpc('get_my_member');
     if (memberError) throw memberError;
     currentIsAdmin = Boolean(me?.is_admin);
@@ -405,7 +412,7 @@ function renderApp() {
         </div>
       </aside>
       <main class="main">
-        <header class="topbar"><div class="topbar-title-wrap"><div><div class="eyebrow">${activeView === 'overview' ? 'Live operations' : 'Team workspace'}</div><h1 class="page-title">${viewTitle(activeView)}</h1></div></div><span id="workspace-clock" class="digital-clock" aria-label="Workspace time">${escapeHtml(formatWorkspaceClock())}</span><div class="top-actions"><button class="button button-secondary button-small" id="new-request-top">＋ New request</button><button class="button button-secondary button-small" id="refresh-workspace">↻ Refresh</button><div class="notification-center" aria-label="Notifications"></div>${remoteMode ? '<span class="live-pill"><i class="live-dot"></i> Live sync</span>' : '<span class="demo-pill">● Local preview</span>'}<button class="mobile-profile-toggle" id="profile-menu-mobile-toggle" type="button" aria-label="Account menu" aria-expanded="${profileMenuOpen}">${initials(me.name)}</button>${profileMenuOpen ? '<div class="mobile-profile-popover"><button type="button" id="profile-sign-out-mobile">↪ Sign out</button></div>' : ''}</div></header>
+        <header class="topbar"><div class="topbar-title-wrap"><div><div class="eyebrow">${activeView === 'overview' ? 'Live operations' : 'Team workspace'}</div><h1 class="page-title">${viewTitle(activeView)}</h1></div></div><span id="workspace-clock" class="digital-clock" aria-label="Workspace time">${escapeHtml(formatWorkspaceClock())}</span><div class="top-actions"><button class="button button-secondary button-small" id="tour-replay" type="button">ⓘ Take a tour</button><button class="button button-secondary button-small" id="new-request-top">＋ New request</button><button class="button button-secondary button-small" id="refresh-workspace">↻ Refresh</button><div class="notification-center" aria-label="Notifications"></div>${remoteMode ? '<span class="live-pill"><i class="live-dot"></i> Live sync</span>' : '<span class="demo-pill">● Local preview</span>'}<button class="mobile-profile-toggle" id="profile-menu-mobile-toggle" type="button" aria-label="Account menu" aria-expanded="${profileMenuOpen}">${initials(me.name)}</button>${profileMenuOpen ? '<div class="mobile-profile-popover"><button type="button" id="profile-sign-out-mobile">↪ Sign out</button></div>' : ''}</div></header>
         <section class="section-view ${activeView === 'overview' ? 'active' : ''}" id="view-overview">${renderOverview(me, assignee, counts, statuses)}</section>
         <section class="section-view ${activeView === 'schedule' ? 'active' : ''}" id="view-schedule">${renderSchedule(me)}</section>
         <section class="section-view ${activeView === 'requests' ? 'active' : ''}" id="view-requests">${renderRequests(me)}</section>
@@ -426,6 +433,11 @@ function renderApp() {
   $('#refresh-workspace')?.addEventListener('click', async () => { try { if (remoteMode) await reloadRemote(); else renderApp(); toast('Workspace refreshed.'); } catch (error) { toast(error.message || 'Refresh failed.', true); } });
   $('#demo-profile')?.addEventListener('change', (event) => { currentMemberId = event.target.value; localStorage.setItem(PROFILE_KEY, currentMemberId); renderApp(); });
   bindViewActions();
+  $('#tour-replay')?.addEventListener('click', () => startIntroTour({ manual: true }));
+  if (introTourAutoStartPending && !introTourActive) {
+    introTourAutoStartPending = false;
+    window.setTimeout(() => startIntroTour({ manual: false }), 650);
+  }
   if (currentIsAdmin && activeView === 'admin' && remoteMode && !adminRosterLoaded) loadAdminRoster();
   if (currentIsAdmin && activeView === 'reports' && remoteMode && !adminAnalytics) loadAdminAnalytics(adminAnalyticsMonth || localDate().slice(0,7));
   startWorkspaceClock();
@@ -434,6 +446,92 @@ function renderApp() {
     sessionStorage.setItem(`whos-next-shift-setup-${currentMemberId}`, 'shown');
     window.setTimeout(() => openShiftDialog(), 250);
   }
+}
+
+
+const introTourStorageKey = () => `whos-next-intro-tour-v1-${workspaceId || 'workspace'}-${currentMemberId || 'member'}`;
+function hasCompletedIntroTour() {
+  try { return localStorage.getItem(introTourStorageKey()) === 'completed'; }
+  catch { return false; }
+}
+function buildIntroTourSteps() {
+  const steps = [
+    { view: 'allocation', target: '[data-view="allocation"]', title: 'Allocate emails fairly', body: 'This is the main work area. Use “Record next email” to assign the next email in the rotation. The app follows the team’s availability and shift rules automatically.' },
+    { view: 'overview', target: '[data-view="overview"]', title: 'See the team at a glance', body: 'Check who is available, on a break, or away. The overview helps everyone understand the live team situation before work is assigned.' },
+    { view: 'schedule', target: '[data-view="schedule"]', title: 'Manage your shift and profile', body: 'Check your shift, attendance, breaks, and personal availability here. Keep your shift details accurate so allocation decisions stay fair.' },
+    { view: 'requests', target: '[data-view="requests"]', title: 'Handle requests', body: 'Raise requests such as breaks or shift changes here. You can track your own requests, and authorised reviewers can approve or reject them.' },
+    { view: 'reports', target: '[data-view="reports"]', title: 'Review activity and reports', body: 'Use reports to understand the day’s allocation activity and attendance. Admins may also see monthly analytics and historical records.' },
+    { view: 'allocation', target: '.notification-center', title: 'Stay on top of notifications', body: 'The bell in the top bar shows new work and other workspace alerts. Open it to review unread items. Browser sound depends on your device and browser permissions.' },
+  ];
+  if (currentIsAdmin) steps.push({ view: 'admin', target: '[data-view="admin"]', title: 'Admin controls', body: 'Admins can manage team members, workspace settings, and operational controls. Only use these controls when you have the appropriate responsibility.' });
+  return steps;
+}
+function clearIntroTourHighlight() {
+  document.querySelectorAll('.tour-target-active').forEach((element) => element.classList.remove('tour-target-active'));
+}
+function renderIntroTourStep() {
+  const root = document.getElementById('tour-root');
+  if (!root || !introTourActive) return;
+  clearIntroTourHighlight();
+  const step = introTourSteps[introTourStepIndex];
+  if (!step) return finishIntroTour();
+  if (activeView !== step.view) {
+    activeView = step.view;
+    renderApp();
+    window.setTimeout(renderIntroTourStep, 0);
+    return;
+  }
+  const target = step.target ? document.querySelector(step.target) : null;
+  if (target) {
+    target.classList.add('tour-target-active');
+    target.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'nearest' });
+  }
+  const total = introTourSteps.length;
+  const progress = Math.round(((introTourStepIndex + 1) / total) * 100);
+  root.innerHTML = `
+    <div class="intro-tour-backdrop" data-tour-backdrop></div>
+    <section class="intro-tour-card" role="dialog" aria-modal="true" aria-labelledby="intro-tour-title" aria-describedby="intro-tour-description">
+      <div class="intro-tour-topline"><span>YOUR QUICK START GUIDE</span><span>STEP ${introTourStepIndex + 1} OF ${total}</span></div>
+      <div class="intro-tour-progress" aria-hidden="true"><span style="width:${progress}%"></span></div>
+      <div class="intro-tour-kicker">WHO'S next · Workspace walkthrough</div>
+      <h2 id="intro-tour-title">${escapeHtml(step.title)}</h2>
+      <p id="intro-tour-description">${escapeHtml(step.body)}</p>
+      <div class="intro-tour-footer">
+        <button class="button button-secondary button-small" id="intro-tour-skip" type="button">Skip tour</button>
+        <div class="intro-tour-actions">
+          <button class="button button-secondary button-small" id="intro-tour-back" type="button" ${introTourStepIndex === 0 ? 'disabled' : ''}>Back</button>
+          <button class="button button-primary button-small" id="intro-tour-next" type="button">${introTourStepIndex === total - 1 ? 'Finish tour' : 'Next step →'}</button>
+        </div>
+      </div>
+    </section>`;
+  root.querySelector('#intro-tour-next')?.addEventListener('click', () => {
+    if (introTourStepIndex >= introTourSteps.length - 1) finishIntroTour();
+    else { introTourStepIndex += 1; renderIntroTourStep(); }
+  });
+  root.querySelector('#intro-tour-back')?.addEventListener('click', () => {
+    if (introTourStepIndex > 0) { introTourStepIndex -= 1; renderIntroTourStep(); }
+  });
+  root.querySelector('#intro-tour-skip')?.addEventListener('click', finishIntroTour);
+  root.querySelector('[data-tour-backdrop]')?.addEventListener('click', finishIntroTour);
+  root.querySelector('#intro-tour-next')?.focus();
+}
+function startIntroTour({ manual = false } = {}) {
+  if (!currentMemberId || !currentMember()) return;
+  if (!manual && hasCompletedIntroTour()) return;
+  introTourPreviousFocus = document.activeElement;
+  introTourSteps = buildIntroTourSteps();
+  introTourStepIndex = 0;
+  introTourActive = true;
+  renderIntroTourStep();
+}
+function finishIntroTour() {
+  introTourActive = false;
+  clearIntroTourHighlight();
+  const root = document.getElementById('tour-root');
+  if (root) root.innerHTML = '';
+  try { localStorage.setItem(introTourStorageKey(), 'completed'); } catch { /* Tour remains available from the top-bar replay button. */ }
+  introTourPreviousFocus?.focus?.();
+  introTourPreviousFocus = null;
 }
 
 function startWorkspaceClock() {

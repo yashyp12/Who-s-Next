@@ -721,3 +721,47 @@ body {
     animation-iteration-count: 1 !important;
   }
 }
+
+
+/* First-time guided tour */
+.intro-tour-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(4, 8, 13, .78);
+  backdrop-filter: blur(3px);
+}
+.intro-tour-card {
+  position: fixed;
+  z-index: 10001;
+  left: 50%;
+  bottom: clamp(18px, 5vh, 48px);
+  transform: translateX(-50%);
+  width: min(520px, calc(100vw - 28px));
+  padding: 22px;
+  border: 1px solid #46586a;
+  border-radius: 18px;
+  background: linear-gradient(145deg, #1c2935, #111923);
+  color: var(--text);
+  box-shadow: 0 28px 90px #000b;
+}
+.intro-tour-topline { display:flex;justify-content:space-between;gap:12px;color:#9eafc0;font-size:9px;font-weight:800;letter-spacing:1.2px; }
+.intro-tour-progress { height:4px;margin:12px 0 20px;border-radius:99px;background:#ffffff12;overflow:hidden; }
+.intro-tour-progress span { display:block;height:100%;border-radius:99px;background:var(--accent);transition:width .2s ease; }
+.intro-tour-kicker { color:var(--accent);font-size:10px;font-weight:700;letter-spacing:.7px;margin-bottom:8px; }
+.intro-tour-card h2 { font:800 22px Manrope;letter-spacing:-.5px;margin:0 0 9px; }
+.intro-tour-card p { color:#c0ccd8;font-size:13px;line-height:1.7;margin:0; }
+.intro-tour-footer { display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:22px; }
+.intro-tour-actions { display:flex;gap:8px; }
+.tour-target-active { position:relative!important;z-index:10002!important;outline:2px solid var(--accent)!important;outline-offset:4px!important;border-radius:10px!important;box-shadow:0 0 0 6px #d1f36a20!important; }
+#tour-replay { white-space:nowrap; }
+@media(max-width:600px) {
+  .intro-tour-card { bottom:12px;padding:18px;border-radius:16px; }
+  .intro-tour-card h2 { font-size:19px; }
+  .intro-tour-card p { font-size:12px;line-height:1.6; }
+  .intro-tour-footer { align-items:flex-end; }
+  .intro-tour-footer>.button { flex:0 0 auto; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .intro-tour-progress span { transition:none; }
+}
