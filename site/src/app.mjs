@@ -1032,8 +1032,8 @@ function renderMiniLineChart(days = []) {
 function csvCell(value) {
   let text = value == null ? '' : String(value);
   // Prevent spreadsheet formula execution when CSV files are opened.
-  if (/^[\t\r\n ]*[=+\-@]/.test(text)) text = \`'\${text}\`;
-  return \`"\${text.replace(/"/g, '""')}"\`;
+  if (/^[\t\r\n ]*[=+\-@]/.test(text)) text = "'" + text;
+  return '"' + text.replace(/"/g, '""') + '"';
 }
 
 function downloadReportCsv(filename, headers, rows) {
