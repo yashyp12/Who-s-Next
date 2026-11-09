@@ -520,7 +520,7 @@ begin
     if exists (select 1 from public.shifts s where s.workspace_id = v_workspace_id and s.member_id = v_request.requester_member_id and s.id <> v_left.id and s.work_date between v_request.work_date - 1 and v_request.work_date + 1
         and v_new_start < (((s.work_date + s.end_time) + case when s.end_time <= s.start_time then interval '1 day' else interval '0' end) at time zone v_timezone)
         and v_new_end > ((s.work_date + s.start_time) at time zone v_timezone)) then
-      raise exception 'The accepted shift would overlap the requester's adjacent shift.';
+      raise exception 'The accepted shift would overlap the requester''s adjacent shift.';
     end if;
     v_new_start := (v_request.work_date + v_left.start_time) at time zone v_timezone;
     v_new_end := ((v_request.work_date + v_left.end_time) + case when v_left.end_time <= v_left.start_time then interval '1 day' else interval '0' end) at time zone v_timezone;
