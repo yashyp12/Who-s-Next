@@ -37,6 +37,6 @@ test('reports states are structured and accessible rather than bare loading text
 });
 
 test('static asset versions are refreshed for the layout and report fix', () => {
-  assert.match(html, /styles\.css\?v=20261109-header-reports-fix/);
-  assert.match(html, /app\.mjs\?v=20261109-header-reports-fix/);
+  assert.match(html, /styles\.css\?v=20261109-team-roster-scroll/);
+  assert.match(html, /app\.mjs\?v=20261109-team-roster-scroll/);
 });
