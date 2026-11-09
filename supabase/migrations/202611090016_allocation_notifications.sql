@@ -15,6 +15,13 @@ create table if not exists public.notifications (
   read_at timestamptz
 );
 
+-- Existing manually provisioned notification tables are upgraded additively as well.
+alter table public.notifications
+  add column if not exists actor_member_id uuid references public.members(id) on delete set null,
+  add column if not exists entity_type text,
+  add column if not exists entity_id uuid,
+  add column if not exists read_at timestamptz;
+
 create index if not exists idx_notifications_recipient_unread
   on public.notifications(recipient_member_id, created_at desc)
   where read_at is null;
