@@ -478,6 +478,7 @@ function renderIntroTourStep() {
   if (activeView !== step.view) {
     activeView = step.view;
     renderApp();
+    window.setTimeout(renderIntroTourStep, 0);
     return;
   }
   const target = step.target ? document.querySelector(step.target) : null;
