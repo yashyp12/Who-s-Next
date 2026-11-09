@@ -17,9 +17,9 @@ test('topbar wraps cleanly without overlapping the clock or tour action', () => 
   assert.match(css, /#tour-replay\s*\{[^}]*flex:\s*0\s+0\s+auto/s);
 });
 
-test('guided tour remains compact and does not block the workspace', () => {
-  assert.match(css, /\.intro-tour-backdrop\s*\{[^}]*pointer-events:\s*none/s);
-  assert.match(css, /\.intro-tour-card\s*\{[^}]*right:\s*24px/s);
+test('guided tour retains its original centered presentation', () => {
+  assert.match(css, /\.intro-tour-backdrop\s*\{[^}]*background:\s*rgba\(4,\s*8,\s*13,\s*\.78\)/s);
+  assert.match(css, /\.intro-tour-card\s*\{[^}]*left:\s*50%/s);
   assert.match(css, /\.tour-target-active\s*\{[^}]*z-index:\s*10002/s);
 });
 
