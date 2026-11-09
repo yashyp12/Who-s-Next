@@ -244,7 +244,10 @@ function subscribe(client, memberId) {
       });
     })
     .subscribe((status) => {
-      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+      if (status === 'SUBSCRIBED') {
+        // Reconcile immediately after initial connect or reconnect; polling remains the fallback.
+        loadNotifications({ notify: initialLoadComplete }).catch((error) => console.error('Notification reconnect sync failed:', error));
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
         console.warn('Notification realtime is unavailable; polling fallback remains active.');
       }
     });
@@ -264,7 +267,7 @@ export function initializeNotificationCenter({ supabase, memberId }) {
     if (pollTimer) window.clearInterval(pollTimer);
     pollTimer = window.setInterval(() => {
       loadNotifications({ notify: true }).catch((error) => console.error('Notification sync failed:', error));
-    }, 3000);
+    }, 2500);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
         unlockAudio();
