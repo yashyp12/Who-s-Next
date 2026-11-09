@@ -1032,13 +1032,13 @@ function renderMiniLineChart(days = []) {
 function csvCell(value) {
   let text = value == null ? '' : String(value);
   // Prevent spreadsheet formula execution when CSV files are opened.
-  if (/^[\\s]*[=+@\\-]/.test(text)) text = `'${text}`;
-  return `"${text.replace(/"/g, '""')}"`;
+  if (/^[\t\r\n ]*[=+\-@]/.test(text)) text = \`'\${text}\`;
+  return \`"\${text.replace(/"/g, '""')}"\`;
 }
 
 function downloadReportCsv(filename, headers, rows) {
-  const csv = [headers, ...rows].map((row) => row.map(csvCell).join(',')).join('\\r\\n');
-  const blob = new Blob(['\\uFEFF', csv], { type: 'text/csv;charset=utf-8' });
+  const csv = [headers, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n');
+  const blob = new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
