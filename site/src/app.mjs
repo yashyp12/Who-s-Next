@@ -1093,9 +1093,9 @@ function renderAdminAnalytics() {
   const agentRows = members.map((item, index) => {
     const count = Number(item.count) || 0;
     const share = total ? count / total * 100 : 0;
-    return `<tr><td><span class="report-rank">${index + 1}</span></td><td><strong>${escapeHtml(item.name)}</strong></td><td>${Number(item.newEmails) || 0}</td><td>${Number(item.existingTickets) || 0}</td><td><strong>${count}</strong></td><td><div class="report-share"><span><i style="width:${Math.min(100, share)}%"></i></span><small>${share.toFixed(1)}%</small></div></td></tr>`;
+    return `<tr class="agent-performance-row"><td><span class="report-rank">${index + 1}</span></td><td><strong>${escapeHtml(item.name)}</strong></td><td>${Number(item.newEmails) || 0}</td><td>${Number(item.existingTickets) || 0}</td><td><strong>${count}</strong></td><td><div class="report-share"><span><i style="width:${Math.min(100, share)}%"></i></span><small>${share.toFixed(1)}%</small></div></td></tr>`;
   }).join('');
-  const recordRows = records.map((item) => `<tr><td>${escapeHtml(item.day)}</td><td><strong>${escapeHtml(item.recipient)}</strong></td><td>${escapeHtml(item.assigner)}</td><td>${escapeHtml(item.reference || '—')}</td><td>${escapeHtml(item.subject || '—')}</td><td><span class="report-type-pill ${item.kind === 'Existing ticket' ? 'ticket' : 'email'}">${escapeHtml(item.kind)}</span></td><td>${escapeHtml(prettyDateTime(item.assignedAt))}</td></tr>`).join('');
+  const recordRows = records.map((item) => `<tr class="allocation-history-row"><td>${escapeHtml(item.day)}</td><td><strong>${escapeHtml(item.recipient)}</strong></td><td>${escapeHtml(item.assigner)}</td><td>${escapeHtml(item.reference || '—')}</td><td>${escapeHtml(item.subject || '—')}</td><td><span class="report-type-pill ${item.kind === 'Existing ticket' ? 'ticket' : 'email'}">${escapeHtml(item.kind)}</span></td><td>${escapeHtml(prettyDateTime(item.assignedAt))}</td></tr>`).join('');
 
   return `<div class="reports-shell">
     <section class="reports-heading">
@@ -1119,7 +1119,7 @@ function renderAdminAnalytics() {
     <section class="panel report-data-panel">
       <div class="panel-head report-panel-heading"><div><div class="panel-title">Agent performance</div><div class="panel-subtitle">Ranked by allocation volume · highest workload first</div></div><button class="button button-secondary button-small" id="export-agent-csv" type="button" ${members.length ? '' : 'disabled'}>↓ Export agent CSV</button></div>
       <div class="report-table-toolbar"><input class="list-search" type="search" placeholder="Search agents…" data-filter-target=".agent-performance-row" aria-label="Search agent performance" /><span>${members.length} team members</span></div>
-      <div class="table-wrap report-table-wrap${members.length > 8 ? ' table-wrap-vertical' : ''}" role="region" aria-label="Agent performance table" tabindex="0"><table class="team-table report-table"><thead><tr><th>Rank</th><th>Agent</th><th>New emails</th><th>Existing tickets</th><th>Total</th><th>Workload share</th></tr></thead><tbody>${members.map((item,index) => agentRows.split('</tr>')[index] ? agentRows.split('</tr>')[index] + '</tr>' : '').join('') || '<tr><td colspan="6"><div class="report-empty-state"><strong>No agent data for this month</strong><span>Try another reporting month.</span></div></td></tr>'}</tbody></table></div>
+      <div class="table-wrap report-table-wrap${members.length > 8 ? ' table-wrap-vertical' : ''}" role="region" aria-label="Agent performance table" tabindex="0"><table class="team-table report-table"><thead><tr><th>Rank</th><th>Agent</th><th>New emails</th><th>Existing tickets</th><th>Total</th><th>Workload share</th></tr></thead><tbody>${agentRows || '<tr><td colspan="6"><div class="report-empty-state"><strong>No agent data for this month</strong><span>Try another reporting month.</span></div></td></tr>'}</tbody></table></div>
     </section>
     <section class="panel report-data-panel">
       <div class="panel-head report-panel-heading"><div><div class="panel-title">Allocation history</div><div class="panel-subtitle">Latest ${records.length.toLocaleString()} records · searchable and exportable</div></div><button class="button button-secondary button-small" id="export-month-csv" type="button" ${records.length ? '' : 'disabled'}>↓ Export history CSV</button></div>
@@ -1173,6 +1173,8 @@ function bindViewActions() {
     panel.querySelectorAll(selector).forEach((item) => { item.hidden = !item.textContent.toLocaleLowerCase().includes(input.value.trim().toLocaleLowerCase()); });
   }));
   $('#analytics-month')?.addEventListener('change', (event) => loadAdminAnalytics(event.target.value));
+  $('#export-agent-csv')?.addEventListener('click', exportAgentPerformanceCsv);
+  $('#export-month-csv')?.addEventListener('click', exportMonthlyAllocationCsv);
   $('#admin-add-member')?.addEventListener('click', openAdminAddMemberDialog);
   $('#admin-run-report')?.addEventListener('click', runAdminShiftReport);
   document.querySelectorAll('[data-admin-set-code]').forEach((button) => button.addEventListener('click', () => setMemberAccessCode(button.dataset.adminSetCode)));
