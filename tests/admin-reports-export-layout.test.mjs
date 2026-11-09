@@ -28,7 +28,7 @@ test('agent report ranks by allocation count and only describes measurable workl
 test('CSV export is UTF-8 compatible and protects against spreadsheet formula injection', () => {
   assert.match(app, /join\('\\r\\n'\)/);
   assert.match(app, /new Blob\(\['\\uFEFF', csv\]/);
-  assert.match(app, /\^\[\\t\\r\\n \]\*\[=\\+\\-@\]/);
+  assert.match(app, /\^\[\\t\\r\\n \]\*\[=+\\-@\]/);
   assert.match(app, /replace\(\/"\/g, '""'\)/);
 });
 
