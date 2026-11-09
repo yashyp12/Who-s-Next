@@ -283,6 +283,7 @@ grant execute on function public.mark_my_notification_read(uuid) to authenticate
 
 
 -- Realtime SELECT is limited to the member mapped to the current anonymous auth session.
+drop policy if exists notifications_select_own on public.notifications;
 create policy notifications_select_own
   on public.notifications
   for select
