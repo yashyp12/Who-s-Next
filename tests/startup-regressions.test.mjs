@@ -227,7 +227,9 @@ test('admin monthly analytics uses a secured database aggregate and renders visu
   const migration = await readFile(new URL('../supabase/migrations/202611030015_admin_monthly_analytics.sql', import.meta.url), 'utf8');
   assert.match(app, /admin_get_monthly_analytics/);
   assert.match(app, /renderMiniLineChart/);
-  assert.match(app, /report-mix-bar/);\n  assert.match(app, /Export agent CSV/);\n  assert.match(app, /Allocation history/);
+  assert.match(app, /report-mix-bar/);
+  assert.match(app, /Export agent CSV/);
+  assert.match(app, /Allocation history/);
   assert.match(app, /Agent performance/);
   assert.match(app, /not represent ticket resolution, quality scores or SLA completion/);
   assert.match(migration, /public\.is_workspace_admin\(\)/);
