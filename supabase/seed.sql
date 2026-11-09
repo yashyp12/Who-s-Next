@@ -58,5 +58,5 @@ join (values
   (13, 'REPLACE-WITH-INDIVIDUAL-CODE-13'),
   (14, 'REPLACE-WITH-INDIVIDUAL-CODE-14')
 ) as c(sort_order, access_code) on c.sort_order = m.sort_order
-on conflict (member_id) do update
-set access_code_hash = excluded.access_code_hash, updated_at = now();
+-- Re-running seed data must never rotate or replace a colleague's existing code.
+on conflict (member_id) do nothing;
