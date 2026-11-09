@@ -7,7 +7,7 @@ const css = await readFile(new URL('../site/src/styles.css', import.meta.url), '
 const html = await readFile(new URL('../site/index.html', import.meta.url), 'utf8');
 
 test('admin analytics puts the daily trend and allocation mix on one responsive row', () => {
-  assert.match(app, /class="analytics-trend-panel"/);
+  assert.match(app, /class="panel analytics-trend-panel"/);
   assert.doesNotMatch(app, /class="panel analytics-wide"/);
   assert.match(css, /\.reports-insights\s*\{[^}]*grid-template-columns:minmax\(0,1\.7fr\) minmax\(260px,\.8fr\)/s);
   assert.match(css, /@media\(max-width:900px\)/);
