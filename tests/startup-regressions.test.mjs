@@ -228,7 +228,7 @@ test('admin monthly analytics uses a secured database aggregate and renders visu
   assert.match(app, /admin_get_monthly_analytics/);
   assert.match(app, /renderMiniLineChart/);
   assert.match(app, /report-mix-bar/);\n  assert.match(app, /Export agent CSV/);\n  assert.match(app, /Allocation history/);
-  assert.match(app, /Agent-wise productivity/);
+  assert.match(app, /Agent performance/);
   assert.match(app, /not represent ticket resolution, quality scores or SLA completion/);
   assert.match(migration, /public\.is_workspace_admin\(\)/);
   assert.match(migration, /p_start_date date/);
