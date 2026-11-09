@@ -15,15 +15,16 @@ test('team availability uses the document as its vertical scroll container', () 
   assert.match(markup, /aria-label="Team availability roster"/);
 });
 
-test('large rosters and report tables do not trap vertical wheel or touch scrolling', () => {
-  assert.match(css, /\.table-wrap-vertical\s*\{[^}]*overflow-y:visible/s);
-  assert.doesNotMatch(css, /\.table-wrap-vertical\s*\{[^}]*max-height:/s);
+test('large rosters and report tables have no fixed-height nested scroll cap', () => {
+  assert.doesNotMatch(css, /max-height:\s*min\(\d+px,/);
+  assert.match(css, /\.table-wrap-vertical\s*\{[^}]*max-height:none/s);
+  assert.match(css, /\.report-table-wrap\.table-wrap-vertical\s*\{[^}]*max-height:none/s);
   assert.doesNotMatch(app, /table-wrap-vertical/);
 });
 
-test('short and long tables retain horizontal overflow without nested vertical scrolling', () => {
-  assert.match(css, /\.table-wrap\s*\{[^}]*overflow-x:auto/s);
-  assert.match(css, /\.table-wrap\s*\{[^}]*overflow-y:visible/s);
+test('wide tables retain horizontal overflow while expanding to their full row height', () => {
+  assert.match(css, /\.table-wrap\{overflow:auto\}/);
+  assert.doesNotMatch(css, /\.table-wrap\s*\{[^}]*max-height:/s);
 });
 
 test('page-level horizontal overflow is clipped without disabling vertical document scrolling', () => {
