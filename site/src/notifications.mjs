@@ -267,7 +267,7 @@ export function initializeNotificationCenter({ supabase, memberId }) {
     if (pollTimer) window.clearInterval(pollTimer);
     pollTimer = window.setInterval(() => {
       loadNotifications({ notify: true }).catch((error) => console.error('Notification sync failed:', error));
-    }, 2500);
+    }, 3000);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
         unlockAudio();
