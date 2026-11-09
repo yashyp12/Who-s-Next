@@ -35,6 +35,6 @@ test('page-level horizontal overflow is clipped without disabling vertical docum
 });
 
 test('frontend asset URLs are cache-busted for the scroll fix', () => {
-  assert.match(html, /styles\.css\?v=20261109-team-roster-scroll/);
-  assert.match(html, /app\.mjs\?v=20261109-team-roster-scroll/);
+  assert.match(html, /styles\.css\?v=20261109-admin-reports-v2/);
+  assert.match(html, /app\.mjs\?v=20261109-admin-reports-v2/);
 });
