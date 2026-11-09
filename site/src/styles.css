@@ -1005,7 +1005,7 @@ html, body {
   -webkit-overflow-scrolling:touch;
 }
 .table-wrap-vertical {
-  max-height:min(560px,62vh);
+  max-height:none;
   overflow-y:auto;
   overflow-x:auto;
   overscroll-behavior:contain;
@@ -1028,7 +1028,7 @@ html, body {
   background:#151e28;
 }
 @media(max-width:720px) {
-  .table-wrap-vertical { max-height:min(460px,56vh); }
+  .table-wrap-vertical { max-height:none; }
 }
 
 
@@ -1183,7 +1183,7 @@ html, body {
   border-top:1px solid #2b3947;
 }
 .report-table-wrap.table-wrap-vertical {
-  max-height:min(500px,58vh);
+  max-height:none;
   overflow:auto;
   scrollbar-gutter:stable;
 }
