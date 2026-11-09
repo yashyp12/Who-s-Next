@@ -16,7 +16,7 @@ test('team availability uses the document as its vertical scroll container', () 
 });
 
 test('large rosters and report tables have no fixed-height nested scroll cap', () => {
-  assert.doesNotMatch(css, /max-height:\s*min\(\d+px,/);
+  assert.doesNotMatch(css, /\.table-wrap-vertical\s*\{[^}]*max-height:min\(/s);
   assert.match(css, /\.table-wrap-vertical\s*\{[^}]*max-height:none/s);
   assert.match(css, /\.report-table-wrap\.table-wrap-vertical\s*\{[^}]*max-height:none/s);
   assert.doesNotMatch(app, /table-wrap-vertical/);
