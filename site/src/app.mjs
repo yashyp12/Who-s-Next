@@ -1105,6 +1105,142 @@ function exportMonthlyAllocationCsv() {
   if (records.length >= 1500) toast('CSV exported. This report currently includes the latest 1,500 allocation records.');
 }
 
+async function exportAdminAnalyticsExcel() {
+  if (!adminAnalytics) return toast('Load a monthly report before exporting.', true);
+  const button = $('#export-analytics-xlsx');
+  if (button) { button.disabled = true; button.textContent = 'Preparing workbook…'; }
+  try {
+    const module = await import('https://esm.sh/exceljs@4.4.0?bundle');
+    const ExcelJS = module.default || module;
+    const data = adminAnalytics;
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "WHO'S next";
+    workbook.subject = 'Allocation analytics ' + adminAnalyticsMonth;
+    workbook.created = new Date();
+
+    const dashboard = workbook.addWorksheet('Dashboard', { views: [{ showGridLines: false }] });
+    dashboard.mergeCells('A1:H1');
+    dashboard.getCell('A1').value = "WHO'S next | Operations dashboard";
+    dashboard.getCell('A1').font = { name: 'Aptos Display', size: 20, bold: true, color: { argb: 'FF17212B' } };
+    dashboard.getCell('A2').value = 'Reporting month: ' + adminAnalyticsMonth + ' | Generated: ' + new Date().toLocaleString();
+    dashboard.getCell('A2').font = { italic: true, color: { argb: 'FF64748B' } };
+    const kpis = [
+      ['Metric', 'Value'],
+      ['Total allocations', Number(data.total || 0)],
+      ['New emails', Number(data.newEmails || 0)],
+      ['Existing tickets', Number(data.existingTickets || 0)],
+      ['Agents with allocations', Number(data.activeAgents || 0)]
+    ];
+    kpis.forEach((row, index) => { dashboard.getRow(index + 4).values = row; });
+    dashboard.getRow(4).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    dashboard.getRow(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF263746' } };
+    dashboard.getColumn(1).width = 28;
+    dashboard.getColumn(2).width = 22;
+    for (let row = 5; row <= 8; row += 1) dashboard.getCell(row, 2).font = { bold: true, size: 14, color: { argb: 'FF263746' } };
+
+    const agents = workbook.addWorksheet('Agent performance');
+    agents.columns = [
+      { header: 'Rank', key: 'rank', width: 10 }, { header: 'Agent', key: 'agent', width: 28 },
+      { header: 'Total allocations', key: 'total', width: 20 }, { header: 'New emails', key: 'emails', width: 15 },
+      { header: 'Existing tickets', key: 'tickets', width: 18 }, { header: 'Workload share', key: 'share', width: 18 }
+    ];
+    [...(data.members || [])].sort((a, b) => Number(b.count) - Number(a.count)).forEach((m, index) => agents.addRow({
+      rank: index + 1, agent: m.name, total: Number(m.count) || 0, emails: Number(m.newEmails) || 0,
+      tickets: Number(m.existingTickets) || 0, share: data.total ? Number(m.count || 0) / Number(data.total) : 0
+    }));
+    agents.autoFilter = { from: 'A1', to: 'F1' };
+    agents.views = [{ state: 'frozen', ySplit: 1 }];
+    agents.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    agents.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF263746' } };
+    agents.getColumn(6).numFmt = '0.0%';
+
+    const history = workbook.addWorksheet('Allocation history');
+    history.columns = [
+      { header: 'Work date', key: 'day', width: 18 }, { header: 'Assigned at', key: 'assignedAt', width: 25 },
+      { header: 'Recipient', key: 'recipient', width: 24 }, { header: 'Assigned by', key: 'assigner', width: 24 },
+      { header: 'Reference', key: 'reference', width: 22 }, { header: 'Subject', key: 'subject', width: 38 },
+      { header: 'Allocation type', key: 'kind', width: 20 }
+    ];
+    (data.records || []).forEach(item => history.addRow({
+      day: item.day, assignedAt: item.assignedAt ? new Date(item.assignedAt) : '',
+      recipient: item.recipient, assigner: item.assigner, reference: item.reference || '',
+      subject: item.subject || '', kind: item.kind
+    }));
+    history.autoFilter = { from: 'A1', to: 'G1' };
+    history.views = [{ state: 'frozen', ySplit: 1 }];
+    history.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    history.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF263746' } };
+    history.getColumn(2).numFmt = 'dd mmm yyyy hh:mm:ss';
+
+    // Render portable PNG chart snapshots so the Dashboard sheet displays visuals in Excel.
+    const makeChartPng = (kind) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 900; canvas.height = 420;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#17212b'; ctx.font = 'bold 25px Arial';
+      if (kind === 'mix') {
+        ctx.fillText('Allocation mix', 32, 42);
+        const email = Number(data.newEmails || 0);
+        const ticket = Number(data.existingTickets || 0);
+        const total = Math.max(1, email + ticket);
+        const cx = 240, cy = 230, radius = 125;
+        ctx.lineWidth = 54; ctx.strokeStyle = '#70c7ee';
+        ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = '#a6d94d'; ctx.beginPath();
+        ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * email / total)); ctx.stroke();
+        ctx.fillStyle = '#17212b'; ctx.font = 'bold 34px Arial'; ctx.textAlign = 'center';
+        ctx.fillText(String(email + ticket), cx, cy + 10);
+        ctx.textAlign = 'left'; ctx.font = '20px Arial'; ctx.fillStyle = '#17212b';
+        ctx.fillText('New emails: ' + email, 450, 190);
+        ctx.fillText('Existing tickets: ' + ticket, 450, 235);
+      } else {
+        ctx.fillText('Daily allocation trend', 32, 42);
+        const days = data.days || [];
+        const values = days.map(d => Number(d.count) || 0);
+        const max = Math.max(1, ...values);
+        const left = 55, right = 850, top = 90, bottom = 340;
+        ctx.strokeStyle = '#d7dee6'; ctx.lineWidth = 2; ctx.beginPath();
+        ctx.moveTo(left, bottom); ctx.lineTo(right, bottom); ctx.stroke();
+        ctx.strokeStyle = '#a6d94d'; ctx.lineWidth = 5; ctx.beginPath();
+        values.forEach((v, i) => {
+          const x = values.length <= 1 ? left : left + i * (right - left) / (values.length - 1);
+          const y = bottom - v / max * (bottom - top);
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke(); ctx.fillStyle = '#a6d94d';
+        values.forEach((v, i) => {
+          const x = values.length <= 1 ? left : left + i * (right - left) / (values.length - 1);
+          const y = bottom - v / max * (bottom - top);
+          ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+        });
+        ctx.fillStyle = '#64748b'; ctx.font = '16px Arial';
+        ctx.fillText(days[0]?.day || '', left, bottom + 35);
+        ctx.textAlign = 'right'; ctx.fillText(days.at(-1)?.day || '', right, bottom + 35);
+      }
+      return canvas.toDataURL('image/png').split(',')[1];
+    };
+    const trendId = workbook.addImage({ base64: makeChartPng('trend'), extension: 'png' });
+    const mixId = workbook.addImage({ base64: makeChartPng('mix'), extension: 'png' });
+    dashboard.addImage(trendId, { tl: { col: 0, row: 10 }, ext: { width: 590, height: 275 } });
+    dashboard.addImage(mixId, { tl: { col: 4, row: 10 }, ext: { width: 590, height: 275 } });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url; anchor.download = 'whos-next-analytics-' + adminAnalyticsMonth + '.xlsx';
+    document.body.append(anchor); anchor.click(); anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+    toast('Excel workbook exported with dashboard charts and data sheets.');
+  } catch (error) {
+    console.error('Excel export failed:', error);
+    toast('Excel export could not be generated. Retry or use the CSV exports.', true);
+  } finally {
+    if (button) { button.disabled = false; button.textContent = '↓ Export Excel workbook'; }
+  }
+}
+
 function renderAdminAnalytics() {
   const data = adminAnalytics;
   const month = adminAnalyticsMonth || localDate().slice(0,7);
