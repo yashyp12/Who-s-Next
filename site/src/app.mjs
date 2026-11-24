@@ -383,7 +383,7 @@ function renderApp() {
   $('#profile-menu-mobile-toggle')?.addEventListener('click', () => { profileMenuOpen = !profileMenuOpen; renderApp(); });
   $('#profile-sign-out')?.addEventListener('click', signOut);
   $('#profile-sign-out-mobile')?.addEventListener('click', signOut);
-  $('[data-admin-role-save]').forEach((button) => button.addEventListener('click', () => saveAdminRole(button.dataset.adminRoleSave)));
+  $$('[data-admin-role-save]').forEach((button) => button.addEventListener('click', () => saveAdminRole(button.dataset.adminRoleSave)));
   $('#refresh-workspace')?.addEventListener('click', async () => { try { if (remoteMode) await reloadRemote(); else renderApp(); toast('Workspace refreshed.'); } catch (error) { toast(error.message || 'Refresh failed.', true); } });
   $('#demo-profile')?.addEventListener('change', (event) => { currentMemberId = event.target.value; localStorage.setItem(PROFILE_KEY, currentMemberId); renderApp(); });
   bindViewActions();
@@ -1011,6 +1011,13 @@ function toast(message, error = false) {
 async function boot() {
   if (!remoteConfigured) {
     remoteMode = false;
+    if (new URLSearchParams(window.location.search).get('preview') === '1') {
+      state = loadDemoState();
+      const savedProfile = localStorage.getItem(PROFILE_KEY);
+      currentMemberId = state.members.some((member) => member.id === savedProfile) ? savedProfile : state.currentAssigneeId;
+      renderApp();
+      return;
+    }
     $('#app').innerHTML = '<main class="join-screen"><section class="join-card"><div class="brand"><span class="brand-mark">W</span><div class="brand-copy">WHO\'S <span>next</span></div></div><div class="eyebrow">Workspace setup</div><h1>Live workspace unavailable.</h1><p>This site is not connected to its Supabase workspace yet. No sample members or fake assignments are being shown.</p><div class="notice">The deployment must provide the Supabase project URL and publishable key before team members can sign in.</div><button class="button button-secondary" onclick="location.reload()">Retry connection</button></section></main>';
     return;
   }

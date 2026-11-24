@@ -14,6 +14,7 @@ test('navigation buttons are selected as a collection before iteration', () => {
 
 test('admin control collections use querySelectorAll before iteration', () => {
   assert.ok(bindingSource, 'bindViewActions must exist');
+  assert.ok(appSource.includes("$$('[data-admin-role-save]').forEach"), 'Role save controls must use a collection selector');
   for (const selector of ['[data-admin-rotate]', '[data-admin-toggle]', '[data-admin-name]', '[data-admin-shift]']) {
     assert.ok(bindingSource.includes(`document.querySelectorAll('${selector}')`), `Expected a collection selector for ${selector}`);
   }
@@ -37,6 +38,11 @@ test('workspace includes persistent sidebar controls, sign-out and shift auto ch
   assert.match(appSource, /set_member_offline/);
   assert.match(appSource, /await maybeAutoCheckIn\(\)/);
   assert.match(appSource, /record_attendance', \{ p_event_type: 'check_in' \}/);
+});
+
+test('local sample data requires an explicit preview query parameter', () => {
+  assert.match(appSource, /new URLSearchParams\(window\.location\.search\)\.get\('preview'\) === '1'/);
+  assert.match(appSource, /state = loadDemoState\(\);[\s\S]*?renderApp\(\);[\s\S]*?return;/);
 });
 
 test('allocation history separates recipient, assigner, time and ticket details', () => {

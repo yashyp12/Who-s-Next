@@ -130,7 +130,7 @@ npm run serve
 
 Open <http://localhost:4173>.
 
-The local preview uses fictional browser-local data only and does not synchronize across devices. It includes a preview profile selector so the UI and core scheduling rules can be explored without a backend. Do not use preview data as production data.
+To explore the UI without connecting to Supabase, open <http://localhost:4173/?preview=1>. This opt-in preview uses fictional browser-local data only and does not synchronize across devices. It includes a preview profile selector so the UI and core scheduling rules can be explored without a backend. Do not use preview data as production data. Without `?preview=1`, an unconfigured site continues to show the workspace setup screen.
 
 ## Connect a shared Supabase workspace
 
